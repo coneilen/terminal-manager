@@ -66,9 +66,12 @@ export class PtySession extends EventEmitter {
     // Send the command after a brief delay to let the shell initialize
     setTimeout(() => {
       if (this.ptyProcess) {
-        // Use --continue for Claude to resume last conversation in this directory
-        const args = this.options.type === 'claude' && this.options.resume ? ' --continue' : '';
-        this.ptyProcess.write(`${command}${args}\r`);
+        if (this.options.type === 'claude' && this.options.resume) {
+          // Try --continue, fall back to plain claude if it fails
+          this.ptyProcess.write(`${command} --continue || ${command}\r`);
+        } else {
+          this.ptyProcess.write(`${command}\r`);
+        }
       }
     }, 100);
 
