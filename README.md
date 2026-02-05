@@ -44,6 +44,34 @@ npm run dev
 2. Browse existing sessions from your Claude history
 3. Click **Import** to add a session (starts with `--continue`)
 
+### Bulk Load from JSON
+
+Create multiple sessions at once from a JSON config file:
+
+1. Click **Load from JSON** in the sidebar
+2. Select your JSON file
+
+**JSON format:**
+```json
+{
+  "sessions": [
+    {
+      "type": "claude",
+      "folder": "~/projects/my-app",
+      "name": "my-app"
+    },
+    {
+      "type": "copilot",
+      "folder": "~/projects/frontend"
+    }
+  ]
+}
+```
+
+- `type`: `"claude"` or `"copilot"`
+- `folder`: Working directory (supports `~` for home)
+- `name`: Optional session name
+
 ### Managing Sessions
 
 - **Switch tabs**: Click tab or use **Ctrl+1-9**

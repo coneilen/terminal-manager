@@ -3,6 +3,7 @@ import type { SessionManager } from './session/manager';
 import type { SessionType } from './session/types';
 import { getImportableSessions, getSessionNameFromProject } from './session/importer';
 import { loadSavedSessions } from './session/persistence';
+import { loadSessionsFromFile } from './session/loader';
 
 export function setupIpcHandlers(sessionManager: SessionManager): void {
   // Create a new session
@@ -154,6 +155,52 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
       return { success: true, session: serializedSession };
     } catch (error) {
       console.error('Failed to import session:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
+  // Open JSON file picker for loading sessions
+  ipcMain.handle('dialog:openSessionsFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      title: 'Select Sessions Config File'
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  // Load sessions from a JSON file
+  ipcMain.handle('session:loadFromFile', async (_event, filePath: string) => {
+    try {
+      const configs = loadSessionsFromFile(filePath);
+      const sessions = [];
+
+      for (const config of configs) {
+        const session = sessionManager.create({
+          type: config.type,
+          workingDir: config.folder,
+          name: config.name
+        });
+        const serializedSession = {
+          ...session,
+          createdAt: session.createdAt instanceof Date
+            ? session.createdAt.toISOString()
+            : session.createdAt
+        };
+        sessions.push(serializedSession);
+      }
+
+      return { success: true, sessions, count: sessions.length };
+    } catch (error) {
+      console.error('Failed to load sessions from file:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'

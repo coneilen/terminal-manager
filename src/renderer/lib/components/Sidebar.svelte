@@ -8,6 +8,7 @@
   const dispatch = createEventDispatcher<{
     newSession: void;
     importSessions: void;
+    loadFromFile: void;
     closeSession: string;
     removeSession: string;
     sessionClick: { id: string; status: string };
@@ -72,6 +73,14 @@
     >
       <span>↓</span>
       <span>Import Claude</span>
+    </button>
+    <button
+      on:click={() => dispatch('loadFromFile')}
+      class="w-full py-2 px-4 bg-terminal-muted bg-opacity-10 hover:bg-opacity-20 text-terminal-muted
+             rounded-md transition-colors text-sm font-medium flex items-center justify-center gap-2"
+    >
+      <span>📄</span>
+      <span>Load from JSON</span>
     </button>
   </div>
 </aside>

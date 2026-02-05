@@ -29,6 +29,8 @@ interface Api {
   homeDir: string;
   quitApp: () => void;
   openFolderDialog: () => Promise<string | null>;
+  openSessionsFileDialog: () => Promise<string | null>;
+  loadSessionsFromFile: (filePath: string) => Promise<{ success: boolean; sessions?: Session[]; count?: number; error?: string }>;
   createSession: (
     type: 'claude' | 'copilot',
     workingDir: string,

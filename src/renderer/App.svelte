@@ -154,6 +154,20 @@
     }
     showImportDialog = false;
   }
+
+  async function handleLoadFromFile() {
+    const filePath = await window.api.openSessionsFileDialog();
+    if (!filePath) return;
+
+    const result = await window.api.loadSessionsFromFile(filePath);
+    if (result.success && result.sessions) {
+      result.sessions.forEach(session => addSession(session));
+      console.log(`Loaded ${result.count} sessions from ${filePath}`);
+    } else {
+      console.error('Failed to load sessions:', result.error);
+      alert(`Failed to load sessions: ${result.error}`);
+    }
+  }
 </script>
 
 <div class="flex h-screen" style="background-color: #1a1b26; color: #c0caf5;">
@@ -165,6 +179,7 @@
     collapsed={$settings.sidebarCollapsed}
     on:newSession={() => (showNewSessionDialog = true)}
     on:importSessions={() => (showImportDialog = true)}
+    on:loadFromFile={handleLoadFromFile}
     on:closeSession={(e) => handleCloseSession(e.detail)}
     on:removeSession={(e) => handleRemoveSession(e.detail)}
     on:sessionClick={(e) => handleSessionClick(e.detail.id, e.detail.status)}

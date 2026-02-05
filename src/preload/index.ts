@@ -25,6 +25,10 @@ export interface Api {
 
   // Dialogs
   openFolderDialog: () => Promise<string | null>;
+  openSessionsFileDialog: () => Promise<string | null>;
+
+  // Bulk load sessions
+  loadSessionsFromFile: (filePath: string) => Promise<{ success: boolean; sessions?: Session[]; count?: number; error?: string }>;
 
   // Session management
   createSession: (
@@ -70,6 +74,10 @@ const api: Api = {
 
   // Dialogs
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
+  openSessionsFileDialog: () => ipcRenderer.invoke('dialog:openSessionsFile'),
+
+  // Bulk load sessions
+  loadSessionsFromFile: (filePath) => ipcRenderer.invoke('session:loadFromFile', filePath),
 
   // Session management
   createSession: (type, workingDir, name) =>
