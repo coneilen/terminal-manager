@@ -1,11 +1,24 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { sessions, activeSessionId, setActiveSession } from '../stores/sessions';
+  import { sidebarContext, selectedMachineId } from '../stores/tunnels';
 
   const dispatch = createEventDispatcher<{
     closeTab: string;
     newTab: void;
   }>();
+
+  // Filter tabs based on sidebar context
+  $: filteredSessions = $sessions.filter(session => {
+    if ($sidebarContext === 'local') {
+      return !session.id.startsWith('tunnel:');
+    }
+    // Remote: show sessions matching selected machine
+    if ($selectedMachineId) {
+      return session.id.startsWith(`tunnel:${$selectedMachineId}:`);
+    }
+    return false;
+  });
 
   function getTypeIndicator(type: string): string {
     return type === 'claude' ? 'C' : 'G';
@@ -32,7 +45,7 @@
   <div class="title-bar-drag absolute top-0 left-0 right-0 h-8"></div>
 
   <div class="flex-1 flex items-center overflow-x-auto title-bar-no-drag">
-    {#each $sessions as session (session.id)}
+    {#each filteredSessions as session (session.id)}
       <button
         class="tab-enter flex items-center gap-2 px-4 py-2 border-b-2 transition-colors
                hover:bg-terminal-border hover:bg-opacity-30 group min-w-0"

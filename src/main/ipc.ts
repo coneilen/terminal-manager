@@ -4,6 +4,8 @@ import type { SessionType } from './session/types';
 import { getImportableSessions, getSessionNameFromProject } from './session/importer';
 import { loadSavedSessions } from './session/persistence';
 import { loadSessionsFromFile } from './session/loader';
+import { isTunnelSessionId, parseTunnelSessionId } from './tunnel/protocol';
+import type { TunnelManager } from './tunnel/manager';
 
 // Track registered channels for cleanup
 const registeredHandleChannels: string[] = [];
@@ -23,7 +25,7 @@ export function cleanupIpcHandlers(): void {
   registeredOnChannels.length = 0;
 }
 
-export function setupIpcHandlers(sessionManager: SessionManager): void {
+export function setupIpcHandlers(sessionManager: SessionManager, tunnelManager?: TunnelManager): void {
   // Track all channels for cleanup
   const handleChannels = [
     'session:create',
@@ -40,6 +42,21 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
     'shell:openExternal'
   ];
   const onChannels = ['session:write', 'session:resize', 'app:quit'];
+
+  // Add tunnel channels if tunnel manager is available
+  if (tunnelManager) {
+    const tunnelHandleChannels = [
+      'tunnel:getStatus',
+      'tunnel:getDiscoveredHosts',
+      'tunnel:getConnectedHosts',
+      'tunnel:connect',
+      'tunnel:disconnect',
+      'tunnel:listSessions',
+      'tunnel:createSession',
+      'tunnel:closeSession'
+    ];
+    handleChannels.push(...tunnelHandleChannels);
+  }
 
   registeredHandleChannels.push(...handleChannels);
   registeredOnChannels.push(...onChannels);
@@ -75,6 +92,16 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
   // Close a session (keeps it in sidebar as inactive)
   ipcMain.handle('session:close', async (_event, id: string) => {
     try {
+      // Route tunnel sessions to tunnel manager
+      if (isTunnelSessionId(id) && tunnelManager) {
+        const parsed = parseTunnelSessionId(id);
+        if (parsed) {
+          const result = await tunnelManager.closeRemoteSession(parsed.instanceId, parsed.remoteSessionId);
+          return { success: result };
+        }
+        return { success: false, error: 'Invalid tunnel session ID' };
+      }
+
       const result = sessionManager.close(id);
       return { success: result };
     } catch (error) {
@@ -144,11 +171,27 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
 
   // Write to a session (one-way, no response needed)
   ipcMain.on('session:write', (_event, id: string, data: string) => {
+    // Route tunnel sessions to tunnel manager
+    if (isTunnelSessionId(id) && tunnelManager) {
+      const parsed = parseTunnelSessionId(id);
+      if (parsed) {
+        tunnelManager.writeRemoteSession(parsed.instanceId, parsed.remoteSessionId, data);
+      }
+      return;
+    }
     sessionManager.write(id, data);
   });
 
   // Resize a session (one-way, no response needed)
   ipcMain.on('session:resize', (_event, id: string, cols: number, rows: number) => {
+    // Route tunnel sessions to tunnel manager
+    if (isTunnelSessionId(id) && tunnelManager) {
+      const parsed = parseTunnelSessionId(id);
+      if (parsed) {
+        tunnelManager.resizeRemoteSession(parsed.instanceId, parsed.remoteSessionId, cols, rows);
+      }
+      return;
+    }
     sessionManager.resize(id, cols, rows);
   });
 
@@ -270,6 +313,47 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
       };
     }
   });
+
+  // Tunnel IPC handlers
+  if (tunnelManager) {
+    ipcMain.handle('tunnel:getStatus', async () => {
+      return tunnelManager.getStatus();
+    });
+
+    ipcMain.handle('tunnel:getDiscoveredHosts', async () => {
+      return tunnelManager.getDiscoveredHosts();
+    });
+
+    ipcMain.handle('tunnel:getConnectedHosts', async () => {
+      return tunnelManager.getConnectedHosts();
+    });
+
+    ipcMain.handle('tunnel:connect', async (_event, instanceId: string) => {
+      return tunnelManager.connect(instanceId);
+    });
+
+    ipcMain.handle('tunnel:disconnect', async (_event, instanceId: string) => {
+      return tunnelManager.disconnect(instanceId);
+    });
+
+    ipcMain.handle('tunnel:listSessions', async (_event, instanceId: string) => {
+      return tunnelManager.listRemoteSessions(instanceId);
+    });
+
+    ipcMain.handle('tunnel:createSession', async (
+      _event,
+      instanceId: string,
+      type: 'claude' | 'copilot',
+      workingDir: string,
+      name?: string
+    ) => {
+      return tunnelManager.createRemoteSession(instanceId, type, workingDir, name);
+    });
+
+    ipcMain.handle('tunnel:closeSession', async (_event, instanceId: string, sessionId: string) => {
+      return tunnelManager.closeRemoteSession(instanceId, sessionId);
+    });
+  }
 
   // Open URL in external browser
   ipcMain.handle('shell:openExternal', async (_event, url: string) => {

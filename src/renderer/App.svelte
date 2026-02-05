@@ -18,6 +18,14 @@
     switchToSessionByIndex
   } from './lib/stores/sessions';
   import { settings } from './lib/stores/settings';
+  import {
+    tunnelEnabled,
+    addOrUpdateHost,
+    removeHost,
+    updateHostStatus,
+    selectedMachineId
+  } from './lib/stores/tunnels';
+  import { makeTunnelSessionId } from './lib/stores/tunnelHelpers';
 
   let showNewSessionDialog = false;
   let showImportDialog = false;
@@ -101,18 +109,75 @@
         addSession(session);
       });
     });
+
+    // Set up tunnel event listeners
+    if (window.api.tunnel) {
+      // Check tunnel status
+      window.api.tunnel.getStatus().then((status) => {
+        tunnelEnabled.set(status.enabled);
+      });
+
+      const cleanupHostFound = window.api.tunnel.onHostFound((host) => {
+        addOrUpdateHost(host);
+      });
+
+      const cleanupHostLost = window.api.tunnel.onHostLost((instanceId) => {
+        // Remove remote sessions for this host
+        sessions.update((s) => s.filter((session) => !session.id.startsWith(`tunnel:${instanceId}:`)));
+        removeHost(instanceId);
+      });
+
+      const cleanupConnected = window.api.tunnel.onConnected(async (instanceId) => {
+        updateHostStatus(instanceId, 'connected');
+        // Auto-fetch remote sessions
+        try {
+          const remoteSessions = await window.api.tunnel.listSessions(instanceId);
+          for (const session of remoteSessions) {
+            const tunnelSession = {
+              ...session,
+              id: makeTunnelSessionId(instanceId, session.id)
+            };
+            addSession(tunnelSession);
+          }
+        } catch (err) {
+          console.error('Failed to fetch remote sessions:', err);
+        }
+      });
+
+      const cleanupDisconnected = window.api.tunnel.onDisconnected((instanceId) => {
+        updateHostStatus(instanceId, 'disconnected');
+        // Remove remote sessions for this host
+        sessions.update((s) => s.filter((session) => !session.id.startsWith(`tunnel:${instanceId}:`)));
+      });
+
+      cleanupFunctions.push(cleanupHostFound, cleanupHostLost, cleanupConnected, cleanupDisconnected);
+    }
   });
 
   onDestroy(() => {
     cleanupFunctions.forEach((fn) => fn());
   });
 
-  async function handleCreateSession(type: 'claude' | 'copilot', workingDir: string) {
-    const result = await window.api.createSession(type, workingDir);
-    if (result.success && result.session) {
-      addSession(result.session);
+  async function handleCreateSession(type: 'claude' | 'copilot', workingDir: string, targetMachine?: string) {
+    if (targetMachine && window.api.tunnel) {
+      // Create on remote machine
+      const session = await window.api.tunnel.createSession(targetMachine, type, workingDir);
+      if (session) {
+        const tunnelSession = {
+          ...session,
+          id: makeTunnelSessionId(targetMachine, session.id)
+        };
+        addSession(tunnelSession);
+      } else {
+        console.error('Failed to create remote session');
+      }
     } else {
-      console.error('Failed to create session:', result.error);
+      const result = await window.api.createSession(type, workingDir);
+      if (result.success && result.session) {
+        addSession(result.session);
+      } else {
+        console.error('Failed to create session:', result.error);
+      }
     }
     showNewSessionDialog = false;
   }
@@ -153,6 +218,22 @@
     showImportDialog = false;
   }
 
+  async function handleTunnelConnect(instanceId: string) {
+    if (!window.api?.tunnel) return;
+    updateHostStatus(instanceId, 'connecting');
+    const success = await window.api.tunnel.connect(instanceId);
+    if (!success) {
+      updateHostStatus(instanceId, 'discovered');
+    }
+    // Connected status will be set by the onConnected event handler
+  }
+
+  async function handleTunnelDisconnect(instanceId: string) {
+    if (!window.api?.tunnel) return;
+    await window.api.tunnel.disconnect(instanceId);
+    // Disconnected status will be set by the onDisconnected event handler
+  }
+
   async function handleLoadFromFile() {
     const filePath = await window.api.openSessionsFileDialog();
     if (!filePath) return;
@@ -178,6 +259,8 @@
     on:closeSession={(e) => handleCloseSession(e.detail)}
     on:removeSession={(e) => handleRemoveSession(e.detail)}
     on:sessionClick={(e) => handleSessionClick(e.detail.id, e.detail.status)}
+    on:tunnelConnect={(e) => handleTunnelConnect(e.detail)}
+    on:tunnelDisconnect={(e) => handleTunnelDisconnect(e.detail)}
   />
 
   <!-- Main content area -->
@@ -212,7 +295,7 @@
   <!-- New session dialog -->
   {#if showNewSessionDialog}
     <NewSessionDialog
-      on:create={(e) => handleCreateSession(e.detail.type, e.detail.workingDir)}
+      on:create={(e) => handleCreateSession(e.detail.type, e.detail.workingDir, e.detail.targetMachine)}
       on:close={() => (showNewSessionDialog = false)}
     />
   {/if}
