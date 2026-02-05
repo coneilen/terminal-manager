@@ -1,6 +1,6 @@
 import { app, BrowserWindow, globalShortcut, shell } from 'electron';
 import { join } from 'path';
-import { setupIpcHandlers } from './ipc';
+import { setupIpcHandlers, cleanupIpcHandlers } from './ipc';
 import { SessionManager } from './session/manager';
 
 // Disable hardware acceleration to avoid GPU issues on some systems
@@ -52,6 +52,14 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
+  mainWindow.on('close', () => {
+    // Clean up before window closes
+    cleanupIpcHandlers();
+    if (sessionManager) {
+      sessionManager.closeAll();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -76,8 +84,18 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
+  // Quit the app when window is closed (including on macOS)
+  app.quit();
+});
+
+// Set shutdown flag early, before window closes
+app.on('before-quit', () => {
+  // Clean up IPC handlers first to stop receiving messages
+  cleanupIpcHandlers();
+
+  // Then close all sessions
+  if (sessionManager) {
+    sessionManager.closeAll();
   }
 });
 
@@ -85,8 +103,9 @@ app.on('will-quit', () => {
   // Unregister all shortcuts
   globalShortcut.unregisterAll();
 
-  // Clean up all sessions
-  if (sessionManager) {
-    sessionManager.closeAll();
-  }
+  // Force exit after a short delay to ensure cleanup completes
+  // This handles cases where PTY processes or other resources prevent clean exit
+  setTimeout(() => {
+    process.exit(0);
+  }, 500);
 });

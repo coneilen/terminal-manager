@@ -31,6 +31,10 @@ export interface PtyOptions {
 export class PtySession extends EventEmitter {
   private ptyProcess: pty.IPty | null = null;
   private _isRunning = false;
+  private _isKilled = false;
+  private startupTimeout: NodeJS.Timeout | null = null;
+  private dataDisposable: { dispose: () => void } | null = null;
+  private exitDisposable: { dispose: () => void } | null = null;
 
   constructor(
     public readonly id: string,
@@ -62,10 +66,11 @@ export class PtySession extends EventEmitter {
     });
 
     this._isRunning = true;
+    this._isKilled = false;
 
     // Send the command after a brief delay to let the shell initialize
-    setTimeout(() => {
-      if (this.ptyProcess) {
+    this.startupTimeout = setTimeout(() => {
+      if (this.ptyProcess && !this._isKilled) {
         if (this.options.type === 'claude' && this.options.resume) {
           // Try --continue, fall back to plain claude if it fails
           this.ptyProcess.write(`${command} --continue || ${command}\r`);
@@ -75,13 +80,17 @@ export class PtySession extends EventEmitter {
       }
     }, 100);
 
-    this.ptyProcess.onData((data) => {
-      this.emit('data', data);
+    this.dataDisposable = this.ptyProcess.onData((data) => {
+      if (!this._isKilled) {
+        this.emit('data', data);
+      }
     });
 
-    this.ptyProcess.onExit(({ exitCode, signal }) => {
+    this.exitDisposable = this.ptyProcess.onExit(({ exitCode, signal }) => {
       this._isRunning = false;
-      this.emit('exit', exitCode, signal);
+      if (!this._isKilled) {
+        this.emit('exit', exitCode, signal);
+      }
     });
   }
 
@@ -98,9 +107,46 @@ export class PtySession extends EventEmitter {
   }
 
   kill(): void {
+    this._isKilled = true;
+    this._isRunning = false;
+
+    // Clear pending startup timeout
+    if (this.startupTimeout) {
+      clearTimeout(this.startupTimeout);
+      this.startupTimeout = null;
+    }
+
+    // Dispose event listeners to prevent callbacks during shutdown
+    if (this.dataDisposable) {
+      this.dataDisposable.dispose();
+      this.dataDisposable = null;
+    }
+    if (this.exitDisposable) {
+      this.exitDisposable.dispose();
+      this.exitDisposable = null;
+    }
+
+    // Remove all EventEmitter listeners
+    this.removeAllListeners();
+
+    // Kill the PTY process with SIGKILL to ensure termination
     if (this.ptyProcess) {
-      this.ptyProcess.kill();
-      this._isRunning = false;
+      try {
+        // First try graceful termination
+        this.ptyProcess.kill();
+        // Then force kill after a brief moment
+        const pid = this.ptyProcess.pid;
+        setTimeout(() => {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {
+            // Process already dead
+          }
+        }, 50);
+      } catch {
+        // Process may already be dead
+      }
+      this.ptyProcess = null;
     }
   }
 }

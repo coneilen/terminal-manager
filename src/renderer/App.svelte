@@ -82,9 +82,7 @@
       return;
     }
 
-    const cleanupOutput = window.api.onSessionOutput((id, data) => {
-      // Terminal component handles this directly
-    });
+    // Note: session:output is handled by Terminal components directly
 
     const cleanupExit = window.api.onSessionExit((id, exitCode) => {
       console.log(`Session ${id} exited with code ${exitCode}`);
@@ -95,7 +93,7 @@
       updateSession(session);
     });
 
-    cleanupFunctions.push(cleanupOutput, cleanupExit, cleanupUpdate);
+    cleanupFunctions.push(cleanupExit, cleanupUpdate);
 
     // Load existing sessions
     window.api.listSessions().then((existingSessions) => {
