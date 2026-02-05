@@ -231,9 +231,21 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
   ipcMain.handle('session:loadFromFile', async (_event, filePath: string) => {
     try {
       const configs = loadSessionsFromFile(filePath);
+      const existingSessions = sessionManager.list();
       const sessions = [];
+      let skipped = 0;
 
       for (const config of configs) {
+        // Check if session already exists for this folder/type
+        const exists = existingSessions.some(
+          s => s.metadata.workingDir === config.folder && s.type === config.type
+        );
+
+        if (exists) {
+          skipped++;
+          continue;
+        }
+
         const session = sessionManager.create({
           type: config.type,
           workingDir: config.folder,
@@ -249,7 +261,7 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
         sessions.push(serializedSession);
       }
 
-      return { success: true, sessions, count: sessions.length };
+      return { success: true, sessions, count: sessions.length, skipped };
     } catch (error) {
       console.error('Failed to load sessions from file:', error);
       return {

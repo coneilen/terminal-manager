@@ -29,7 +29,7 @@ export interface Api {
   openSessionsFileDialog: () => Promise<string | null>;
 
   // Bulk load sessions
-  loadSessionsFromFile: (filePath: string) => Promise<{ success: boolean; sessions?: Session[]; count?: number; error?: string }>;
+  loadSessionsFromFile: (filePath: string) => Promise<{ success: boolean; sessions?: Session[]; count?: number; skipped?: number; error?: string }>;
 
   // Session management
   createSession: (
