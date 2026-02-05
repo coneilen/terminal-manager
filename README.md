@@ -114,13 +114,27 @@ src/
 
 ```bash
 # Build for macOS
-npm run build:mac
+npm run package:mac
 
 # Build for Windows
-npm run build:win
+npm run package:win
 
 # Build for Linux
-npm run build:linux
+npm run package:linux
+```
+
+Packaged apps will be output to the `release/` directory.
+
+## CI/CD
+
+This project uses GitHub Actions for:
+- **CI**: Builds and tests on every push/PR (Mac, Linux, Windows)
+- **Release**: Automatically packages and creates GitHub releases when you push a version tag
+
+To create a release:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 ## License
