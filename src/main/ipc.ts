@@ -187,7 +187,8 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
         const session = sessionManager.create({
           type: config.type,
           workingDir: config.folder,
-          name: config.name
+          name: config.name,
+          resume: config.type === 'claude' // Use --continue for Claude
         });
         const serializedSession = {
           ...session,
