@@ -1,13 +1,13 @@
 import { EventEmitter } from 'events';
-import Bonjour, { type Service } from 'bonjour-service';
+import { Bonjour, type Service } from 'bonjour-service';
 import type { LocalIdentity } from './identity';
 import type { TunnelHostInfo } from './protocol';
 
 const SERVICE_TYPE = 'terminal-manager';
 
 export class TunnelDiscovery extends EventEmitter {
-  private bonjour: InstanceType<typeof Bonjour> | null = null;
-  private browser: ReturnType<InstanceType<typeof Bonjour>['find']> | null = null;
+  private bonjour: Bonjour | null = null;
+  private browser: ReturnType<Bonjour['find']> | null = null;
   private hosts: Map<string, TunnelHostInfo> = new Map();
 
   constructor(

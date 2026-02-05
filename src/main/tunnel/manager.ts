@@ -47,6 +47,7 @@ export class TunnelManager extends EventEmitter {
       this.discovery = new TunnelDiscovery(this.identity, port);
       this.setupDiscoveryHandlers();
       this.discovery.start();
+      console.log(`[TunnelManager] Discovery started, broadcasting as ${this.identity.hostname}`);
 
       // Bridge SessionManager events to server broadcasts
       this.setupSessionManagerBridge();
