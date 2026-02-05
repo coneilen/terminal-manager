@@ -10,6 +10,11 @@ let mainWindow: BrowserWindow | null = null;
 let sessionManager: SessionManager | null = null;
 
 function createWindow(): void {
+  // Determine icon path based on platform and environment
+  const iconPath = process.platform === 'darwin'
+    ? join(__dirname, '../../resources/icon.icns')
+    : join(__dirname, '../../resources/icon.png');
+
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -18,6 +23,7 @@ function createWindow(): void {
     backgroundColor: '#1a1b26',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 15 },
+    icon: iconPath,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       nodeIntegration: false,
