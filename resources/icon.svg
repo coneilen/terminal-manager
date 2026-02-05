@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#1a1b26"/>
+  <rect x="48" y="48" width="416" height="416" rx="32" fill="#16161e" stroke="#2f3549" stroke-width="4"/>
+
+  <!-- Terminal prompt icon -->
+  <path d="M128 192 L192 256 L128 320" stroke="#7aa2f7" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="224" y1="320" x2="384" y2="320" stroke="#7aa2f7" stroke-width="24" stroke-linecap="round"/>
+
+  <!-- Claude indicator (top right) -->
+  <circle cx="400" cy="112" r="48" fill="#d4a574" opacity="0.3"/>
+  <text x="400" y="124" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#d4a574" text-anchor="middle">C</text>
+
+  <!-- Copilot indicator (bottom right) -->
+  <circle cx="400" cy="400" r="48" fill="#7ee787" opacity="0.3"/>
+  <text x="400" y="412" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#7ee787" text-anchor="middle">G</text>
+</svg>

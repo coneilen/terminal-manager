@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #16161e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2f3549;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3d4663;
+}
+
+/* Ensure terminal fills space properly */
+.xterm {
+  height: 100%;
+  padding: 8px;
+}
+
+.xterm-viewport {
+  overflow-y: auto !important;
+}
+
+/* Title bar drag region */
+.title-bar-drag {
+  -webkit-app-region: drag;
+}
+
+.title-bar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Focus styles */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid #7aa2f7;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+.transition-sidebar {
+  transition: width 200ms ease-in-out;
+}
+
+/* Tab animations */
+.tab-enter {
+  animation: tab-enter 150ms ease-out;
+}
+
+@keyframes tab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Session item hover effect */
+.session-item {
+  transition: background-color 150ms ease;
+}
+
+.session-item:hover {
+  background-color: rgba(122, 162, 247, 0.1);
+}
+
+.session-item.active {
+  background-color: rgba(122, 162, 247, 0.2);
+  border-left: 3px solid #7aa2f7;
+}
+
+.session-item.inactive {
+  opacity: 0.5;
+}
+
+.session-item.inactive:hover {
+  opacity: 0.8;
+}
