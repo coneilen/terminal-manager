@@ -36,10 +36,17 @@ function createWindow(): void {
   // Set up IPC handlers
   setupIpcHandlers(sessionManager);
 
-  // Handle external links
+  // Handle external links from window.open
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // Handle navigation attempts (clicking links)
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    // Prevent navigation and open in external browser instead
+    event.preventDefault();
+    shell.openExternal(url);
   });
 
   // Open DevTools in development mode only

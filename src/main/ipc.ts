@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron';
+import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron';
 import type { SessionManager } from './session/manager';
 import type { SessionType } from './session/types';
 import { getImportableSessions, getSessionNameFromProject } from './session/importer';
@@ -36,7 +36,8 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
     'session:getImportable',
     'session:import',
     'dialog:openSessionsFile',
-    'session:loadFromFile'
+    'session:loadFromFile',
+    'shell:openExternal'
   ];
   const onChannels = ['session:write', 'session:resize', 'app:quit'];
 
@@ -251,6 +252,31 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
       return { success: true, sessions, count: sessions.length };
     } catch (error) {
       console.error('Failed to load sessions from file:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
+  // Open URL in external browser
+  ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+    // Validate URL - only allow http and https
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return { success: false, error: 'Invalid URL' };
+    }
+
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return { success: false, error: 'Only http and https URLs are supported' };
+    }
+
+    try {
+      await shell.openExternal(parsedUrl.href);
+      return { success: true };
+    } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
