@@ -56,11 +56,21 @@ export class TunnelDiscovery extends EventEmitter {
     // Only show peers with matching identity
     if (identityHash !== this.identity.identityHash) return;
 
-    // Get address — prefer IPv4
-    const address = service.referer?.address
-      || service.addresses?.find((a: string) => !a.includes(':'))
-      || service.addresses?.[0];
-    if (!address) return;
+    // Get address from DNS records (service.addresses), NOT referer.address
+    // referer.address is the network-level source of the mDNS packet which
+    // can be a gateway/router IP on cross-subnet or bridged networks.
+    // Prefer a routable IPv4 address, skip loopback and link-local.
+    const addresses = service.addresses || [];
+    const address = addresses.find(
+      (a: string) => !a.includes(':') && !a.startsWith('127.') && !a.startsWith('169.254.')
+    ) || addresses.find((a: string) => !a.includes(':')) || addresses[0];
+
+    if (!address) {
+      console.log(`[TunnelDiscovery] No usable address for ${hostname} (${instanceId}), addresses: ${JSON.stringify(addresses)}`);
+      return;
+    }
+
+    console.log(`[TunnelDiscovery] Found peer ${hostname} at ${address}:${service.port} (addresses: ${JSON.stringify(addresses)})`);
 
     const host: TunnelHostInfo = {
       instanceId,

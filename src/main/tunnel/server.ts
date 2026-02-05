@@ -58,7 +58,9 @@ export class TunnelServer extends EventEmitter {
       });
 
       this.httpServer.on('error', reject);
-      this.httpServer.listen(port, () => {
+      // Bind to 0.0.0.0 explicitly to accept connections from all interfaces
+      // (important on Windows where default behavior can vary)
+      this.httpServer.listen(port, '0.0.0.0', () => {
         this.httpServer!.removeListener('error', reject);
         resolve();
       });
