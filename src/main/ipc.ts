@@ -5,7 +5,44 @@ import { getImportableSessions, getSessionNameFromProject } from './session/impo
 import { loadSavedSessions } from './session/persistence';
 import { loadSessionsFromFile } from './session/loader';
 
+// Track registered channels for cleanup
+const registeredHandleChannels: string[] = [];
+const registeredOnChannels: string[] = [];
+
+export function cleanupIpcHandlers(): void {
+  // Remove all handle channels
+  for (const channel of registeredHandleChannels) {
+    ipcMain.removeHandler(channel);
+  }
+  registeredHandleChannels.length = 0;
+
+  // Remove all on channels
+  for (const channel of registeredOnChannels) {
+    ipcMain.removeAllListeners(channel);
+  }
+  registeredOnChannels.length = 0;
+}
+
 export function setupIpcHandlers(sessionManager: SessionManager): void {
+  // Track all channels for cleanup
+  const handleChannels = [
+    'session:create',
+    'session:close',
+    'session:remove',
+    'session:restart',
+    'session:list',
+    'session:get',
+    'dialog:openFolder',
+    'session:getImportable',
+    'session:import',
+    'dialog:openSessionsFile',
+    'session:loadFromFile'
+  ];
+  const onChannels = ['session:write', 'session:resize', 'app:quit'];
+
+  registeredHandleChannels.push(...handleChannels);
+  registeredOnChannels.push(...onChannels);
+
   // Create a new session
   ipcMain.handle(
     'session:create',
