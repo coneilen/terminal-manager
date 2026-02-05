@@ -171,9 +171,6 @@
 </script>
 
 <div class="flex h-screen" style="background-color: #1a1b26; color: #c0caf5;">
-  <!-- Title bar drag region (for frameless window) -->
-  <div class="title-bar-drag absolute top-0 left-0 right-0 h-8 z-50"></div>
-
   <!-- Sidebar -->
   <Sidebar
     collapsed={$settings.sidebarCollapsed}
