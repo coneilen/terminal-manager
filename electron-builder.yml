@@ -1,5 +1,9 @@
 appId: com.terminal-manager.app
 productName: Terminal Manager
+publish:
+  provider: github
+  owner: coneilen
+  repo: terminal-manager
 directories:
   buildResources: resources
   output: release
