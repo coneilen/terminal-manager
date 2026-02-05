@@ -1,10 +1,17 @@
 import { app, BrowserWindow, globalShortcut, shell } from 'electron';
 import { join } from 'path';
+import { updateElectronApp } from 'update-electron-app';
 import { setupIpcHandlers, cleanupIpcHandlers } from './ipc';
 import { SessionManager } from './session/manager';
 
 // Disable hardware acceleration to avoid GPU issues on some systems
 app.disableHardwareAcceleration();
+
+// Check for updates (works with GitHub releases)
+updateElectronApp({
+  updateInterval: '1 hour',
+  notifyUser: true
+});
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: SessionManager | null = null;
@@ -42,8 +49,10 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // Always open DevTools for debugging
-  mainWindow.webContents.openDevTools();
+  // Open DevTools in development mode only
+  if (process.env.ELECTRON_RENDERER_URL) {
+    mainWindow.webContents.openDevTools();
+  }
 
   // Load the renderer - electron-vite sets ELECTRON_RENDERER_URL in dev mode
   if (process.env.ELECTRON_RENDERER_URL) {
