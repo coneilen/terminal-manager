@@ -1,6 +1,6 @@
 {
   "name": "terminal-manager",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Cross-platform terminal manager for Claude Code and GitHub Copilot sessions",
   "repository": "https://github.com/coneilen/terminal-manager",
   "main": "dist/main/index.js",
