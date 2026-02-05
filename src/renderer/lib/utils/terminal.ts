@@ -1,6 +1,5 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalInstance {
@@ -42,14 +41,17 @@ export function createTerminal(container: HTMLElement, sessionId: string): Termi
     cursorStyle: 'block',
     allowTransparency: false,
     scrollback: 10000,
-    tabStopWidth: 4
+    tabStopWidth: 4,
+    // Handle OSC 8 hyperlinks (terminal escape sequences for clickable links)
+    linkHandler: {
+      activate: (_event: MouseEvent, text: string) => {
+        window.api.openExternal(text);
+      }
+    }
   });
 
   const fitAddon = new FitAddon();
-  const webLinksAddon = new WebLinksAddon();
-
   terminal.loadAddon(fitAddon);
-  terminal.loadAddon(webLinksAddon);
 
   terminal.open(container);
   fitAddon.fit();

@@ -22,6 +22,7 @@ export interface Api {
 
   // App control
   quitApp: () => void;
+  openExternal: (url: string) => void;
 
   // Dialogs
   openFolderDialog: () => Promise<string | null>;
@@ -71,6 +72,7 @@ const api: Api = {
 
   // App control
   quitApp: () => ipcRenderer.send('app:quit'),
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
 
   // Dialogs
   openFolderDialog: () => ipcRenderer.invoke('dialog:openFolder'),
