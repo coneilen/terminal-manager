@@ -1,17 +1,10 @@
 import { app, BrowserWindow, globalShortcut, shell } from 'electron';
 import { join } from 'path';
-import { updateElectronApp } from 'update-electron-app';
 import { setupIpcHandlers, cleanupIpcHandlers } from './ipc';
 import { SessionManager } from './session/manager';
 
 // Disable hardware acceleration to avoid GPU issues on some systems
 app.disableHardwareAcceleration();
-
-// Check for updates (works with GitHub releases)
-updateElectronApp({
-  updateInterval: '1 hour',
-  notifyUser: true
-});
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: SessionManager | null = null;
@@ -82,6 +75,18 @@ function registerGlobalShortcuts(): void {
 }
 
 app.whenReady().then(() => {
+  // Check for updates in production only
+  if (!process.env.ELECTRON_RENDERER_URL) {
+    import('update-electron-app').then(({ updateElectronApp }) => {
+      updateElectronApp({
+        updateInterval: '1 hour',
+        notifyUser: true
+      });
+    }).catch(() => {
+      // Ignore update errors - don't prevent app from starting
+    });
+  }
+
   createWindow();
   registerGlobalShortcuts();
 
