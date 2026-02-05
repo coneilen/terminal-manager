@@ -14,6 +14,7 @@ interface ManagedSession {
 export class SessionManager extends EventEmitter {
   private sessions: Map<string, ManagedSession> = new Map();
   private sessionCounter: Map<string, number> = new Map();
+  private isShuttingDown = false;
 
   constructor(private mainWindow: BrowserWindow) {
     super();
@@ -132,9 +133,11 @@ export class SessionManager extends EventEmitter {
   }
 
   closeAll(): void {
-    for (const [id] of this.sessions) {
-      this.close(id);
+    this.isShuttingDown = true;
+    for (const [, managed] of this.sessions) {
+      managed.pty.kill();
     }
+    this.sessions.clear();
   }
 
   write(id: string, data: string): boolean {
@@ -174,6 +177,9 @@ export class SessionManager extends EventEmitter {
   }
 
   private sendSessionUpdate(session: Session): void {
+    if (this.isShuttingDown || this.mainWindow.isDestroyed()) {
+      return;
+    }
     // Serialize for IPC (Date -> string)
     const serialized = {
       ...session,
@@ -181,14 +187,26 @@ export class SessionManager extends EventEmitter {
         ? session.createdAt.toISOString()
         : session.createdAt
     };
-    this.mainWindow.webContents.send('session:update', serialized);
+    try {
+      this.mainWindow.webContents.send('session:update', serialized);
+    } catch {
+      // Window may be destroyed, ignore
+    }
   }
 
   private setupPtyHandlers(id: string, ptySession: PtySession): void {
     // Handle PTY output
     ptySession.on('data', (data: string) => {
+      if (this.isShuttingDown || this.mainWindow.isDestroyed()) {
+        return;
+      }
+
       // Send output to renderer
-      this.mainWindow.webContents.send('session:output', id, data);
+      try {
+        this.mainWindow.webContents.send('session:output', id, data);
+      } catch {
+        return; // Window destroyed
+      }
 
       // Extract metadata from output
       const managed = this.sessions.get(id);
@@ -215,10 +233,18 @@ export class SessionManager extends EventEmitter {
 
     // Handle PTY exit
     ptySession.on('exit', (exitCode: number) => {
+      if (this.isShuttingDown || this.mainWindow.isDestroyed()) {
+        return;
+      }
+
       const managed = this.sessions.get(id);
       if (managed) {
         managed.session.status = 'closed';
-        this.mainWindow.webContents.send('session:exit', id, exitCode);
+        try {
+          this.mainWindow.webContents.send('session:exit', id, exitCode);
+        } catch {
+          // Window destroyed
+        }
         this.sendSessionUpdate(managed.session);
       }
     });
