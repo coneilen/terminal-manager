@@ -23,7 +23,24 @@ export function loadSavedSessions(): SavedSession[] {
 
   try {
     const data = readFileSync(configPath, 'utf-8');
-    return JSON.parse(data);
+    const sessions: SavedSession[] = JSON.parse(data);
+
+    // Deduplicate: keep only the latest session per workingDir/type combination
+    // (later entries in the array are considered newer)
+    const seen = new Map<string, SavedSession>();
+    for (const session of sessions) {
+      const key = `${session.type}:${session.workingDir}`;
+      seen.set(key, session); // Overwrites earlier entries, keeping the latest
+    }
+
+    const deduped = Array.from(seen.values());
+
+    // If we removed duplicates, save the cleaned list
+    if (deduped.length < sessions.length) {
+      saveSessions(deduped);
+    }
+
+    return deduped;
   } catch (error) {
     console.error('Failed to load saved sessions:', error);
     return [];
@@ -47,12 +64,17 @@ export function saveSessions(sessions: SavedSession[]): void {
 }
 
 export function addSavedSession(session: SavedSession): void {
-  const sessions = loadSavedSessions();
-  // Don't duplicate
-  if (!sessions.find(s => s.id === session.id)) {
-    sessions.push(session);
-    saveSessions(sessions);
-  }
+  let sessions = loadSavedSessions();
+
+  // Remove any existing session with the same workingDir and type
+  // This keeps only the latest session per folder/type combination
+  sessions = sessions.filter(s =>
+    !(s.workingDir === session.workingDir && s.type === session.type)
+  );
+
+  // Add the new session
+  sessions.push(session);
+  saveSessions(sessions);
 }
 
 export function removeSavedSession(id: string): void {

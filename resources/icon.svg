@@ -1,16 +1,62 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#1a1b26"/>
-  <rect x="48" y="48" width="416" height="416" rx="32" fill="#16161e" stroke="#2f3549" stroke-width="4"/>
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#1a1b26"/>
 
-  <!-- Terminal prompt icon -->
-  <path d="M128 192 L192 256 L128 320" stroke="#7aa2f7" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <line x1="224" y1="320" x2="384" y2="320" stroke="#7aa2f7" stroke-width="24" stroke-linecap="round"/>
+  <!-- Grid of terminal windows representing "manager" -->
 
-  <!-- Claude indicator (top right) -->
-  <circle cx="400" cy="112" r="48" fill="#d4a574" opacity="0.3"/>
-  <text x="400" y="124" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#d4a574" text-anchor="middle">C</text>
+  <!-- Top-left terminal (Claude) -->
+  <rect x="40" y="40" width="200" height="140" rx="12" fill="#16161e" stroke="#d4a574" stroke-width="3"/>
+  <rect x="40" y="40" width="200" height="28" rx="12" fill="#d4a574" opacity="0.2"/>
+  <circle cx="56" cy="54" r="6" fill="#ff5f57"/>
+  <circle cx="76" cy="54" r="6" fill="#febc2e"/>
+  <circle cx="96" cy="54" r="6" fill="#28c840"/>
+  <path d="M60 100 L85 120 L60 140" stroke="#d4a574" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="95" y1="140" x2="160" y2="140" stroke="#d4a574" stroke-width="6" stroke-linecap="round"/>
 
-  <!-- Copilot indicator (bottom right) -->
-  <circle cx="400" cy="400" r="48" fill="#7ee787" opacity="0.3"/>
-  <text x="400" y="412" font-family="Arial, sans-serif" font-size="48" font-weight="bold" fill="#7ee787" text-anchor="middle">G</text>
+  <!-- Top-right terminal (Copilot) -->
+  <rect x="272" y="40" width="200" height="140" rx="12" fill="#16161e" stroke="#7ee787" stroke-width="3"/>
+  <rect x="272" y="40" width="200" height="28" rx="12" fill="#7ee787" opacity="0.2"/>
+  <circle cx="288" cy="54" r="6" fill="#ff5f57"/>
+  <circle cx="308" cy="54" r="6" fill="#febc2e"/>
+  <circle cx="328" cy="54" r="6" fill="#28c840"/>
+  <path d="M292 100 L317 120 L292 140" stroke="#7ee787" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="327" y1="140" x2="392" y2="140" stroke="#7ee787" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Bottom-left terminal (Claude) -->
+  <rect x="40" y="212" width="200" height="140" rx="12" fill="#16161e" stroke="#d4a574" stroke-width="3"/>
+  <rect x="40" y="212" width="200" height="28" rx="12" fill="#d4a574" opacity="0.2"/>
+  <circle cx="56" cy="226" r="6" fill="#ff5f57"/>
+  <circle cx="76" cy="226" r="6" fill="#febc2e"/>
+  <circle cx="96" cy="226" r="6" fill="#28c840"/>
+  <path d="M60 272 L85 292 L60 312" stroke="#d4a574" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="95" y1="312" x2="160" y2="312" stroke="#d4a574" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Bottom-right terminal (Copilot) -->
+  <rect x="272" y="212" width="200" height="140" rx="12" fill="#16161e" stroke="#7ee787" stroke-width="3"/>
+  <rect x="272" y="212" width="200" height="28" rx="12" fill="#7ee787" opacity="0.2"/>
+  <circle cx="288" cy="226" r="6" fill="#ff5f57"/>
+  <circle cx="308" cy="226" r="6" fill="#febc2e"/>
+  <circle cx="328" cy="226" r="6" fill="#28c840"/>
+  <path d="M292 272 L317 292 L292 312" stroke="#7ee787" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <line x1="327" y1="312" x2="392" y2="312" stroke="#7ee787" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Bottom status bar / manager indicator -->
+  <rect x="40" y="380" width="432" height="92" rx="16" fill="#16161e" stroke="#7aa2f7" stroke-width="3"/>
+
+  <!-- Session indicators in status bar -->
+  <circle cx="90" cy="426" r="20" fill="#d4a574" opacity="0.3"/>
+  <text x="90" y="433" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#d4a574" text-anchor="middle">C</text>
+
+  <circle cx="150" cy="426" r="20" fill="#d4a574" opacity="0.3"/>
+  <text x="150" y="433" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#d4a574" text-anchor="middle">C</text>
+
+  <circle cx="210" cy="426" r="20" fill="#7ee787" opacity="0.3"/>
+  <text x="210" y="433" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#7ee787" text-anchor="middle">G</text>
+
+  <circle cx="270" cy="426" r="20" fill="#7ee787" opacity="0.3"/>
+  <text x="270" y="433" font-family="system-ui, sans-serif" font-size="20" font-weight="bold" fill="#7ee787" text-anchor="middle">G</text>
+
+  <!-- Active indicator -->
+  <rect x="340" y="406" width="112" height="40" rx="8" fill="#7aa2f7" opacity="0.2"/>
+  <text x="396" y="433" font-family="system-ui, sans-serif" font-size="18" font-weight="600" fill="#7aa2f7" text-anchor="middle">4 Active</text>
 </svg>
