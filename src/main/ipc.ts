@@ -84,12 +84,24 @@ export function setupIpcHandlers(sessionManager: SessionManager): void {
 
   // Get all sessions
   ipcMain.handle('session:list', async () => {
-    return sessionManager.list();
+    return sessionManager.list().map(session => ({
+      ...session,
+      createdAt: session.createdAt instanceof Date
+        ? session.createdAt.toISOString()
+        : session.createdAt
+    }));
   });
 
   // Get a single session
   ipcMain.handle('session:get', async (_event, id: string) => {
-    return sessionManager.get(id);
+    const session = sessionManager.get(id);
+    if (!session) return undefined;
+    return {
+      ...session,
+      createdAt: session.createdAt instanceof Date
+        ? session.createdAt.toISOString()
+        : session.createdAt
+    };
   });
 
   // Write to a session (one-way, no response needed)

@@ -28,11 +28,14 @@
 </script>
 
 <aside
-  class="transition-sidebar bg-terminal-sidebar border-r border-terminal-border flex flex-col"
+  class="transition-sidebar bg-terminal-sidebar border-r border-terminal-border flex flex-col relative"
   class:w-64={!collapsed}
   class:w-0={collapsed}
   class:overflow-hidden={collapsed}
 >
+  <!-- Drag region - top area next to traffic lights (start after 80px for traffic lights) -->
+  <div class="title-bar-drag absolute top-0 left-20 right-0 h-10"></div>
+
   <!-- Header - pt-10 accounts for macOS traffic lights -->
   <div class="px-4 pt-10 pb-4 border-b border-terminal-border title-bar-no-drag">
     <h1 class="text-sm font-semibold text-terminal-text uppercase tracking-wide">Sessions</h1>

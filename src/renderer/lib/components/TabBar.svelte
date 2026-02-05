@@ -27,8 +27,11 @@
   }
 </script>
 
-<div class="flex items-center pt-8 bg-terminal-sidebar border-b border-terminal-border title-bar-no-drag">
-  <div class="flex-1 flex items-center overflow-x-auto">
+<div class="flex items-center pt-8 bg-terminal-sidebar border-b border-terminal-border relative">
+  <!-- Drag region for window movement - covers the top padding area -->
+  <div class="title-bar-drag absolute top-0 left-0 right-0 h-8"></div>
+
+  <div class="flex-1 flex items-center overflow-x-auto title-bar-no-drag">
     {#each $sessions as session (session.id)}
       <button
         class="tab-enter flex items-center gap-2 px-4 py-2 border-b-2 transition-colors
@@ -64,7 +67,7 @@
   <button
     on:click={() => dispatch('newTab')}
     class="px-3 py-2 text-terminal-muted hover:text-terminal-text hover:bg-terminal-border
-           hover:bg-opacity-30 transition-colors shrink-0"
+           hover:bg-opacity-30 transition-colors shrink-0 title-bar-no-drag"
     title="New session (F2)"
   >
     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

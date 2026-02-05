@@ -29,6 +29,10 @@ function createWindow(): void {
   // Initialize session manager
   sessionManager = new SessionManager(mainWindow);
 
+  // Restore saved sessions BEFORE loading the renderer
+  // This ensures sessions are available when the renderer calls listSessions()
+  sessionManager.restoreSessions();
+
   // Set up IPC handlers
   setupIpcHandlers(sessionManager);
 
@@ -47,13 +51,6 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
-
-  // Restore saved sessions once the renderer is ready
-  mainWindow.webContents.on('did-finish-load', () => {
-    if (sessionManager) {
-      sessionManager.restoreSessions();
-    }
-  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
