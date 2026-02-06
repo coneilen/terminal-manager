@@ -5,6 +5,7 @@ An Electron desktop app for managing multiple Claude Code and GitHub Copilot ter
 ## Features
 
 - **Multiple Sessions**: Run Claude Code and GitHub Copilot sessions side-by-side with tabs
+- **LAN Tunneling**: Discover and control terminal sessions on other machines on your local network
 - **Session Metadata**: View model, context usage, git branch, working directory, and current task at a glance
 - **Session Persistence**: Sessions are saved and automatically restored on app restart
 - **Resume Conversations**: Claude sessions restart with `--continue` to resume the last conversation
@@ -72,6 +73,26 @@ Create multiple sessions at once from a JSON config file:
 - `folder`: Working directory (supports `~` for home)
 - `name`: Optional session name
 
+### LAN Tunneling
+
+Terminal Manager automatically discovers other instances running on your local network. Machines with the same `git config --global user.email` are paired automatically — no manual configuration needed.
+
+1. Switch to the **Remote** tab in the sidebar
+2. Discovered machines appear automatically
+3. Click **Connect** on a machine to establish a secure connection
+4. View, create, and interact with sessions on the remote machine
+
+**How it works:**
+- Discovery uses mDNS (macOS) and UDP broadcast beacons (cross-platform) to find peers
+- Connections are encrypted with Diffie-Hellman key exchange + AES-256-GCM
+- Only machines with matching git email identity can connect to each other
+- Remote sessions appear in the same UI as local sessions — you can type, resize, and manage them just like local terminals
+
+**Requirements:**
+- Both machines must be on the same local network
+- Both must have the same `git config --global user.email` configured
+- On Windows, you may need to allow UDP port 41832 and TCP port 9500 through the firewall
+
 ### Managing Sessions
 
 - **Switch tabs**: Click tab or use **Ctrl+1-9**
@@ -110,6 +131,7 @@ npm run package
 - **Frontend**: Svelte + TypeScript
 - **Terminal**: xterm.js + node-pty
 - **Styling**: Tailwind CSS
+- **Networking**: bonjour-service (mDNS), ws (WebSocket)
 - **Build**: electron-vite
 
 ### Project Structure
@@ -119,13 +141,21 @@ src/
 ├── main/                    # Electron main process
 │   ├── index.ts             # App entry, window creation
 │   ├── ipc.ts               # IPC handlers
-│   └── session/
-│       ├── manager.ts       # Session lifecycle
-│       ├── pty.ts           # node-pty wrapper
-│       ├── metadata.ts      # Output parsing
-│       ├── persistence.ts   # Save/restore sessions
-│       ├── importer.ts      # Import from ~/.claude
-│       └── types.ts
+│   ├── session/
+│   │   ├── manager.ts       # Session lifecycle
+│   │   ├── pty.ts           # node-pty wrapper
+│   │   ├── metadata.ts      # Output parsing
+│   │   ├── persistence.ts   # Save/restore sessions
+│   │   ├── importer.ts      # Import from ~/.claude
+│   │   └── types.ts
+│   └── tunnel/              # LAN tunneling
+│       ├── manager.ts       # Tunnel orchestrator
+│       ├── discovery.ts     # mDNS + UDP beacon peer discovery
+│       ├── server.ts        # WebSocket server (accepts connections)
+│       ├── client.ts        # WebSocket client (connects to peers)
+│       ├── protocol.ts      # Wire protocol types
+│       ├── identity.ts      # Git email identity detection
+│       └── crypto.ts        # DH key exchange + AES-256-GCM
 ├── preload/
 │   └── index.ts             # IPC bridge
 └── renderer/                # Svelte frontend
