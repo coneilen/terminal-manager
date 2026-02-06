@@ -16,6 +16,15 @@ export interface Session {
   createdAt: string;
 }
 
+export interface TunnelHostInfo {
+  instanceId: string;
+  hostname: string;
+  identityHash: string;
+  address: string;
+  port: number;
+  status: 'discovered' | 'connecting' | 'connected' | 'disconnected';
+}
+
 export interface Api {
   // Environment
   homeDir: string;
@@ -55,6 +64,22 @@ export interface Api {
   onSessionOutput: (callback: (id: string, data: string) => void) => () => void;
   onSessionExit: (callback: (id: string, exitCode: number) => void) => () => void;
   onSessionUpdate: (callback: (session: Session) => void) => () => void;
+
+  // Tunnel API
+  tunnel: {
+    getStatus: () => Promise<{ enabled: boolean; identity: { hostname: string; identityHash: string } | null }>;
+    getDiscoveredHosts: () => Promise<TunnelHostInfo[]>;
+    getConnectedHosts: () => Promise<TunnelHostInfo[]>;
+    connect: (instanceId: string) => Promise<boolean>;
+    disconnect: (instanceId: string) => Promise<void>;
+    listSessions: (instanceId: string) => Promise<Session[]>;
+    createSession: (instanceId: string, type: 'claude' | 'copilot', workingDir: string, name?: string) => Promise<Session | null>;
+    closeSession: (instanceId: string, sessionId: string) => Promise<boolean>;
+    onHostFound: (callback: (host: TunnelHostInfo) => void) => () => void;
+    onHostLost: (callback: (instanceId: string) => void) => () => void;
+    onConnected: (callback: (instanceId: string) => void) => () => void;
+    onDisconnected: (callback: (instanceId: string) => void) => () => void;
+  };
 }
 
 export interface ImportableSession {
@@ -128,6 +153,40 @@ const api: Api = {
     };
     ipcRenderer.on('session:update', handler);
     return () => ipcRenderer.removeListener('session:update', handler);
+  },
+
+  // Tunnel API
+  tunnel: {
+    getStatus: () => ipcRenderer.invoke('tunnel:getStatus'),
+    getDiscoveredHosts: () => ipcRenderer.invoke('tunnel:getDiscoveredHosts'),
+    getConnectedHosts: () => ipcRenderer.invoke('tunnel:getConnectedHosts'),
+    connect: (instanceId: string) => ipcRenderer.invoke('tunnel:connect', instanceId),
+    disconnect: (instanceId: string) => ipcRenderer.invoke('tunnel:disconnect', instanceId),
+    listSessions: (instanceId: string) => ipcRenderer.invoke('tunnel:listSessions', instanceId),
+    createSession: (instanceId: string, type: 'claude' | 'copilot', workingDir: string, name?: string) =>
+      ipcRenderer.invoke('tunnel:createSession', instanceId, type, workingDir, name),
+    closeSession: (instanceId: string, sessionId: string) =>
+      ipcRenderer.invoke('tunnel:closeSession', instanceId, sessionId),
+    onHostFound: (callback: (host: TunnelHostInfo) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, host: TunnelHostInfo) => callback(host);
+      ipcRenderer.on('tunnel:host-found', handler);
+      return () => ipcRenderer.removeListener('tunnel:host-found', handler);
+    },
+    onHostLost: (callback: (instanceId: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, instanceId: string) => callback(instanceId);
+      ipcRenderer.on('tunnel:host-lost', handler);
+      return () => ipcRenderer.removeListener('tunnel:host-lost', handler);
+    },
+    onConnected: (callback: (instanceId: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, instanceId: string) => callback(instanceId);
+      ipcRenderer.on('tunnel:connected', handler);
+      return () => ipcRenderer.removeListener('tunnel:connected', handler);
+    },
+    onDisconnected: (callback: (instanceId: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, instanceId: string) => callback(instanceId);
+      ipcRenderer.on('tunnel:disconnected', handler);
+      return () => ipcRenderer.removeListener('tunnel:disconnected', handler);
+    }
   }
 };
 

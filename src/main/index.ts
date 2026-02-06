@@ -2,12 +2,14 @@ import { app, BrowserWindow, globalShortcut, shell } from 'electron';
 import { join } from 'path';
 import { setupIpcHandlers, cleanupIpcHandlers } from './ipc';
 import { SessionManager } from './session/manager';
+import { TunnelManager } from './tunnel/manager';
 
 // Disable hardware acceleration to avoid GPU issues on some systems
 app.disableHardwareAcceleration();
 
 let mainWindow: BrowserWindow | null = null;
 let sessionManager: SessionManager | null = null;
+let tunnelManager: TunnelManager | null = null;
 
 function createWindow(): void {
   // Determine icon path based on platform and environment
@@ -39,8 +41,16 @@ function createWindow(): void {
   // This ensures sessions are available when the renderer calls listSessions()
   sessionManager.restoreSessions();
 
-  // Set up IPC handlers
-  setupIpcHandlers(sessionManager);
+  // Initialize tunnel manager
+  tunnelManager = new TunnelManager(mainWindow, sessionManager);
+
+  // Set up IPC handlers (with tunnel manager)
+  setupIpcHandlers(sessionManager, tunnelManager);
+
+  // Start tunnel discovery (async, non-blocking)
+  tunnelManager.start().catch((err) => {
+    console.error('Failed to start tunnel manager:', err);
+  });
 
   // Handle external links from window.open
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -70,6 +80,7 @@ function createWindow(): void {
   mainWindow.on('close', () => {
     // Clean up before window closes
     cleanupIpcHandlers();
+    tunnelManager?.stop();
     if (sessionManager) {
       sessionManager.closeAll();
     }
@@ -119,6 +130,9 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // Clean up IPC handlers first to stop receiving messages
   cleanupIpcHandlers();
+
+  // Stop tunnel manager
+  tunnelManager?.stop();
 
   // Then close all sessions
   if (sessionManager) {

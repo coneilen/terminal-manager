@@ -192,6 +192,9 @@ export class SessionManager extends EventEmitter {
     } catch {
       // Window may be destroyed, ignore
     }
+
+    // Emit for tunnel server bridge
+    this.emit('session:update', serialized);
   }
 
   private setupPtyHandlers(id: string, ptySession: PtySession): void {
@@ -207,6 +210,9 @@ export class SessionManager extends EventEmitter {
       } catch {
         return; // Window destroyed
       }
+
+      // Emit for tunnel server bridge
+      this.emit('session:output', id, data);
 
       // Extract metadata from output
       const managed = this.sessions.get(id);
@@ -245,6 +251,10 @@ export class SessionManager extends EventEmitter {
         } catch {
           // Window destroyed
         }
+
+        // Emit for tunnel server bridge
+        this.emit('session:exit', id, exitCode);
+
         this.sendSessionUpdate(managed.session);
       }
     });

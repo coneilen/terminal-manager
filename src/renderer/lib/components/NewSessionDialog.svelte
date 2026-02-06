@@ -1,10 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
+  import { sidebarContext, selectedMachine } from '../stores/tunnels';
 
   const dispatch = createEventDispatcher<{
-    create: { type: 'claude' | 'copilot'; workingDir: string };
+    create: { type: 'claude' | 'copilot'; workingDir: string; targetMachine?: string };
     close: void;
   }>();
+
+  $: isRemote = $sidebarContext === 'remote' && $selectedMachine?.status === 'connected';
+  $: remoteMachine = $selectedMachine;
 
   let sessionType: 'claude' | 'copilot' = 'claude';
   let workingDir = window.api?.homeDir || '~';
@@ -15,7 +19,11 @@
   });
 
   function handleSubmit() {
-    dispatch('create', { type: sessionType, workingDir });
+    dispatch('create', {
+      type: sessionType,
+      workingDir,
+      targetMachine: isRemote ? remoteMachine?.instanceId : undefined
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -67,6 +75,11 @@
     </div>
 
     <div class="px-6 py-4 space-y-4">
+      {#if isRemote && remoteMachine}
+        <div class="px-3 py-2 rounded-md bg-terminal-active bg-opacity-10 border border-terminal-active border-opacity-30 text-sm text-terminal-active">
+          Creating on remote machine: <strong>{remoteMachine.hostname}</strong>
+        </div>
+      {/if}
       <div>
         <label class="block text-sm font-medium text-terminal-text mb-2">Session Type</label>
         <div class="flex gap-3">
