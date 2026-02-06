@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { homedir } from 'os';
 
 export interface Session {
@@ -64,6 +64,12 @@ export interface Api {
   onSessionOutput: (callback: (id: string, data: string) => void) => () => void;
   onSessionExit: (callback: (id: string, exitCode: number) => void) => () => void;
   onSessionUpdate: (callback: (session: Session) => void) => () => void;
+
+  // Clipboard
+  clipboard: {
+    writeText: (text: string) => void;
+    readText: () => string;
+  };
 
   // Tunnel API
   tunnel: {
@@ -153,6 +159,12 @@ const api: Api = {
     };
     ipcRenderer.on('session:update', handler);
     return () => ipcRenderer.removeListener('session:update', handler);
+  },
+
+  // Clipboard
+  clipboard: {
+    writeText: (text: string) => clipboard.writeText(text),
+    readText: () => clipboard.readText()
   },
 
   // Tunnel API

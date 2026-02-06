@@ -58,6 +58,11 @@ interface Api {
   onSessionExit: (callback: (id: string, exitCode: number) => void) => () => void;
   onSessionUpdate: (callback: (session: Session) => void) => () => void;
 
+  clipboard: {
+    writeText(text: string): void;
+    readText(): string;
+  };
+
   tunnel: {
     getStatus: () => Promise<{ enabled: boolean; identity: { hostname: string; identityHash: string } | null }>;
     getDiscoveredHosts: () => Promise<TunnelHostInfo[]>;

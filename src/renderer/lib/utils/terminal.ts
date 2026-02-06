@@ -76,6 +76,27 @@ export function createTerminal(container: HTMLElement, sessionId: string): Termi
       if (['F1', 'F2', 'F3', 'F4'].includes(event.key)) {
         return false;
       }
+      // Ctrl+Shift+C - copy selection
+      if (event.ctrlKey && event.shiftKey && event.key === 'C') {
+        const selection = terminal.getSelection();
+        if (selection) {
+          window.api.clipboard.writeText(selection);
+        }
+        return false;
+      }
+      // Ctrl+Shift+V - paste from clipboard
+      if (event.ctrlKey && event.shiftKey && event.key === 'V') {
+        const text = window.api.clipboard.readText();
+        if (text) {
+          window.api.writeToSession(sessionId, text);
+        }
+        return false;
+      }
+      // Ctrl+Shift+A - select all
+      if (event.ctrlKey && event.shiftKey && event.key === 'A') {
+        terminal.selectAll();
+        return false;
+      }
     }
     return true; // Handle normally in terminal
   });

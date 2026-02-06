@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { createTerminal, type TerminalInstance } from '../utils/terminal';
+  import TerminalContextMenu from './TerminalContextMenu.svelte';
 
   export let sessionId: string;
 
@@ -8,6 +9,42 @@
   let terminalInstance: TerminalInstance | null = null;
   let cleanupOutput: (() => void) | null = null;
   let isDragging = false;
+
+  let contextMenu: { x: number; y: number } | null = null;
+  let hasSelection = false;
+
+  function handleContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    hasSelection = !!terminalInstance?.terminal.getSelection();
+    contextMenu = { x: e.clientX, y: e.clientY };
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+    terminalInstance?.terminal.focus();
+  }
+
+  function handleCopy() {
+    const selection = terminalInstance?.terminal.getSelection();
+    if (selection) {
+      window.api.clipboard.writeText(selection);
+    }
+  }
+
+  function handlePaste() {
+    const text = window.api.clipboard.readText();
+    if (text) {
+      window.api.writeToSession(sessionId, text);
+    }
+  }
+
+  function handleSelectAll() {
+    terminalInstance?.terminal.selectAll();
+  }
+
+  function handleClear() {
+    terminalInstance?.terminal.clear();
+  }
 
   onMount(() => {
     if (containerRef) {
@@ -94,6 +131,7 @@
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
+  on:contextmenu={handleContextMenu}
 >
   {#if isDragging}
     <div class="absolute inset-0 bg-terminal-active bg-opacity-20 border-2 border-dashed border-terminal-active rounded-lg flex items-center justify-center z-10 pointer-events-none">
@@ -101,3 +139,16 @@
     </div>
   {/if}
 </div>
+
+{#if contextMenu}
+  <TerminalContextMenu
+    x={contextMenu.x}
+    y={contextMenu.y}
+    {hasSelection}
+    onCopy={handleCopy}
+    onPaste={handlePaste}
+    onSelectAll={handleSelectAll}
+    onClear={handleClear}
+    onClose={closeContextMenu}
+  />
+{/if}
