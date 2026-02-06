@@ -92,3 +92,19 @@
 .session-item.inactive:hover {
   opacity: 0.8;
 }
+
+/* Attention pulse for sessions waiting for input */
+.attention-pulse {
+  animation: attention-pulse 2s ease-in-out infinite !important;
+}
+
+@keyframes attention-pulse {
+  0%, 100% {
+    color: #38bdf8 !important;
+    opacity: 1;
+  }
+  50% {
+    color: #38bdf8 !important;
+    opacity: 0.3;
+  }
+}

@@ -12,6 +12,7 @@ interface Session {
     model: string;
     contextUsed: string;
     lastMessage: string;
+    waitingForInput: boolean;
   };
   createdAt: string;
 }

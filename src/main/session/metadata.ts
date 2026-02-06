@@ -59,10 +59,17 @@ export function extractMetadataFromOutput(
   // Extract window title from OSC sequence - contains current task
   // Claude uses OSC 0: \u001b]0;✳ Task Name\u0007
   const claudeTitleMatch = output.match(/\u001b\]0;[⠐⠂✳✶✻✽✢·⠈⠁⠃]\s*([^\u0007]+)\u0007/);
-  if (claudeTitleMatch && claudeTitleMatch[1] && claudeTitleMatch[1] !== 'Claude Code') {
+  if (claudeTitleMatch && claudeTitleMatch[1]) {
     const title = claudeTitleMatch[1].trim();
-    if (title.length > 2 && title.length < 80) {
-      updates.lastMessage = title;
+    if (title === 'Claude Code') {
+      // "✳ Claude Code" is the idle title — Claude is waiting for user input
+      updates.waitingForInput = true;
+    } else {
+      // Spinner + task description means Claude is actively processing
+      if (title.length > 2 && title.length < 80) {
+        updates.lastMessage = title;
+      }
+      updates.waitingForInput = false;
     }
   }
 
@@ -80,9 +87,10 @@ export function extractMetadataFromOutput(
   const dimTextMatch = output.match(/\u001b\[2m([^\u001b]+)\u001b\[22m/);
   if (dimTextMatch && dimTextMatch[1]) {
     const prompt = dimTextMatch[1].trim();
-    if (prompt.length > 2 && prompt.length < 100
-        && !prompt.startsWith('Type @')
-        && !prompt.startsWith('─')) {
+    if (prompt.startsWith('Type @')) {
+      // Claude is showing input placeholder — waiting for user input
+      updates.waitingForInput = true;
+    } else if (prompt.length > 2 && prompt.length < 100 && !prompt.startsWith('─')) {
       updates.lastMessage = prompt;
     }
   }
@@ -117,10 +125,15 @@ export function extractMetadataFromOutput(
       updates.lastMessage = input;
     }
   }
+  // Copilot bare prompt (❯ with no input) means waiting for input
+  if (output.includes('❯') && !copilotPromptMatch) {
+    updates.waitingForInput = true;
+  }
 
   // Thinking indicator (lowest priority)
   if (output.includes('thinking') && !updates.lastMessage) {
     updates.lastMessage = 'Thinking...';
+    updates.waitingForInput = false;
   }
 
   return updates;
@@ -132,6 +145,7 @@ export function createInitialMetadata(workingDir: string): SessionMetadata {
     gitBranch: extractGitBranch(workingDir),
     model: '',
     contextUsed: '',
-    lastMessage: ''
+    lastMessage: '',
+    waitingForInput: false
   };
 }

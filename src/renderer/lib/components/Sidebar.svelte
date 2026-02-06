@@ -254,6 +254,7 @@
                     {session}
                     active={session.id === $activeSessionId}
                     collapsed={collapsedSessions.has(session.id)}
+
                     on:click={() => handleSessionClick(session.id, session.status)}
                     on:close={() => handleCloseSession(session.id)}
                     on:remove={() => handleRemoveSession(session.id)}
@@ -294,6 +295,7 @@
                     {session}
                     active={session.id === $activeSessionId}
                     collapsed={collapsedSessions.has(session.id)}
+
                     on:click={() => handleSessionClick(session.id, session.status)}
                     on:close={() => handleCloseSession(session.id)}
                     on:remove={() => handleRemoveSession(session.id)}

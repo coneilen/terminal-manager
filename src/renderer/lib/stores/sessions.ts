@@ -9,6 +9,7 @@ export interface SessionMetadata {
   model: string;
   contextUsed: string;
   lastMessage: string;
+  waitingForInput: boolean;
 }
 
 export interface Session {
@@ -25,6 +26,7 @@ export const sessions = writable<Session[]>([]);
 
 // Store for the currently active session ID
 export const activeSessionId = writable<string | null>(null);
+
 
 // Derived store for the active session
 export const activeSession = derived(

@@ -7,6 +7,7 @@ export interface SessionMetadata {
   model: string;
   contextUsed: string;
   lastMessage: string;
+  waitingForInput: boolean;
 }
 
 export interface Session {
