@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { createSocket, type Socket } from 'dgram';
+import { networkInterfaces } from 'os';
 import { Bonjour, type Service } from 'bonjour-service';
 import type { LocalIdentity } from './identity';
 import type { TunnelHostInfo } from './protocol';
@@ -93,12 +94,8 @@ export class TunnelDiscovery extends EventEmitter {
     this.registerHost(instanceId, hostname, identityHash, address, service.port);
   }
 
-  private handleServiceLost(service: Service): void {
-    const txt = service.txt as Record<string, string> | undefined;
-    if (!txt?.instanceId) return;
-    const instanceId = txt.instanceId;
-    // Don't remove immediately — the beacon may still be alive.
-    // Let the sweep timer handle removal based on last-seen.
+  private handleServiceLost(_service: Service): void {
+    // Don't remove immediately — the beacon sweep timer handles removal based on last-seen.
   }
 
   // ── UDP broadcast beacon (cross-platform fallback) ──
@@ -115,7 +112,8 @@ export class TunnelDiscovery extends EventEmitter {
         console.error('[TunnelDiscovery] Beacon socket error:', err);
       });
 
-      this.beaconSocket.bind(BEACON_PORT, () => {
+      // Bind to all interfaces explicitly
+      this.beaconSocket.bind(BEACON_PORT, '0.0.0.0', () => {
         this.beaconSocket!.setBroadcast(true);
         console.log(`[TunnelDiscovery] Beacon listening on UDP ${BEACON_PORT}`);
 
@@ -131,6 +129,24 @@ export class TunnelDiscovery extends EventEmitter {
     }
   }
 
+  /** Compute broadcast addresses for all active IPv4 network interfaces. */
+  private getBroadcastAddresses(): string[] {
+    const addresses: string[] = [];
+    const ifaces = networkInterfaces();
+    for (const ifaceList of Object.values(ifaces)) {
+      if (!ifaceList) continue;
+      for (const iface of ifaceList) {
+        if (iface.family !== 'IPv4' || iface.internal) continue;
+        // Compute broadcast = ip | ~netmask
+        const ipParts = iface.address.split('.').map(Number);
+        const maskParts = iface.netmask.split('.').map(Number);
+        const broadcast = ipParts.map((ip, i) => (ip | (~maskParts[i] & 0xff))).join('.');
+        addresses.push(broadcast);
+      }
+    }
+    return addresses;
+  }
+
   private sendBeacon(): void {
     if (!this.beaconSocket) return;
 
@@ -143,11 +159,22 @@ export class TunnelDiscovery extends EventEmitter {
     };
 
     const buf = Buffer.from(JSON.stringify(payload));
+    const broadcastAddrs = this.getBroadcastAddresses();
 
+    // Send to each subnet's directed broadcast address (most reliable)
+    for (const addr of broadcastAddrs) {
+      try {
+        this.beaconSocket.send(buf, 0, buf.length, BEACON_PORT, addr);
+      } catch {
+        // Send can fail if network is down, ignore
+      }
+    }
+
+    // Also send to limited broadcast as fallback
     try {
       this.beaconSocket.send(buf, 0, buf.length, BEACON_PORT, '255.255.255.255');
     } catch {
-      // Send can fail if network is down, ignore
+      // ignore
     }
   }
 
