@@ -3,7 +3,7 @@ import { BrowserWindow } from 'electron';
 import type { SessionManager } from '../session/manager';
 import { detectIdentity, type LocalIdentity } from './identity';
 import { TunnelDiscovery } from './discovery';
-import { TunnelServer } from './server';
+import { TunnelServer, type ClientInfo } from './server';
 import { TunnelClient } from './client';
 import {
   makeTunnelSessionId,
@@ -52,9 +52,26 @@ export class TunnelManager extends EventEmitter {
       // Bridge SessionManager events to server broadcasts
       this.setupSessionManagerBridge();
 
-      // Setup server event handlers
-      this.server.on('client-connected', (instanceId: string) => {
-        console.log(`[TunnelManager] Client connected: ${instanceId}`);
+      // Setup server event handlers — reverse discovery
+      // When a remote machine connects to us as a client, register it as a
+      // known host so we can also see and connect back to it. This handles
+      // the case where mDNS only works one direction (common on Windows).
+      this.server.on('client-connected', (info: ClientInfo) => {
+        console.log(`[TunnelManager] Client connected: ${info.hostname} (${info.instanceId}) from ${info.address}`);
+
+        if (!this.hosts.has(info.instanceId)) {
+          const host: TunnelHostInfo = {
+            instanceId: info.instanceId,
+            hostname: info.hostname,
+            identityHash: info.identityHash,
+            address: info.address,
+            port: info.port,
+            status: 'discovered'
+          };
+          this.hosts.set(info.instanceId, host);
+          this.sendToRenderer('tunnel:host-found', host);
+          console.log(`[TunnelManager] Reverse-discovered host: ${info.hostname} at ${info.address}:${info.port}`);
+        }
       });
       this.server.on('client-disconnected', (instanceId: string) => {
         console.log(`[TunnelManager] Client disconnected: ${instanceId}`);

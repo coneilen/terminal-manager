@@ -1,10 +1,18 @@
 import { EventEmitter } from 'events';
-import { createServer, type Server } from 'http';
+import { createServer, type Server, type IncomingMessage } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { LocalIdentity } from './identity';
 import type { SessionManager } from '../session/manager';
 import type { TunnelMessage, SerializedSession } from './protocol';
 import { generateKeyPair, encrypt, decrypt } from './crypto';
+
+export interface ClientInfo {
+  instanceId: string;
+  hostname: string;
+  identityHash: string;
+  address: string;
+  port: number;
+}
 
 interface AuthenticatedClient {
   ws: WebSocket;
@@ -53,8 +61,8 @@ export class TunnelServer extends EventEmitter {
       this.httpServer = createServer();
       this.wss = new WebSocketServer({ server: this.httpServer });
 
-      this.wss.on('connection', (ws: WebSocket) => {
-        this.handleConnection(ws);
+      this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+        this.handleConnection(ws, req);
       });
 
       this.httpServer.on('error', reject);
@@ -67,11 +75,18 @@ export class TunnelServer extends EventEmitter {
     });
   }
 
-  private handleConnection(ws: WebSocket): void {
+  private handleConnection(ws: WebSocket, req: IncomingMessage): void {
     const keyPair = generateKeyPair();
     let sharedSecret: Buffer | null = null;
     let authenticated = false;
     let clientInstanceId: string | null = null;
+
+    // Extract remote address from the TCP socket
+    let remoteAddress = req.socket.remoteAddress || '';
+    // Strip IPv6-mapped IPv4 prefix (::ffff:192.168.x.x → 192.168.x.x)
+    if (remoteAddress.startsWith('::ffff:')) {
+      remoteAddress = remoteAddress.slice(7);
+    }
 
     // Send our public key
     this.sendRaw(ws, { type: 'key:exchange', publicKey: keyPair.publicKey });
@@ -97,7 +112,16 @@ export class TunnelServer extends EventEmitter {
               clientInstanceId = msg.instanceId;
               this.clients.set(msg.instanceId, { ws, instanceId: msg.instanceId, sharedSecret });
               this.sendEncrypted(ws, sharedSecret, { type: 'auth:approved' });
-              this.emit('client-connected', msg.instanceId);
+
+              // Emit full client info for reverse discovery
+              const clientInfo: ClientInfo = {
+                instanceId: msg.instanceId,
+                hostname: msg.hostname,
+                identityHash: msg.identityHash,
+                address: remoteAddress,
+                port: this.actualPort // Client can connect back on same port
+              };
+              this.emit('client-connected', clientInfo);
             } else {
               this.sendEncrypted(ws, sharedSecret, { type: 'auth:denied', reason: 'Identity mismatch' });
               ws.close();

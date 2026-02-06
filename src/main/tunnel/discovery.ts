@@ -1,14 +1,33 @@
 import { EventEmitter } from 'events';
+import { createSocket, type Socket } from 'dgram';
 import { Bonjour, type Service } from 'bonjour-service';
 import type { LocalIdentity } from './identity';
 import type { TunnelHostInfo } from './protocol';
 
 const SERVICE_TYPE = 'terminal-manager';
+const BEACON_PORT = 41832; // UDP broadcast port for fallback discovery
+const BEACON_INTERVAL = 5000; // Broadcast every 5 seconds
+const BEACON_MAGIC = 'TM_BEACON_V1';
+const HOST_TIMEOUT = 20000; // Consider host lost after 20s without beacon
+
+interface BeaconPayload {
+  magic: string;
+  instanceId: string;
+  hostname: string;
+  identityHash: string;
+  port: number; // WebSocket server port
+}
 
 export class TunnelDiscovery extends EventEmitter {
   private bonjour: Bonjour | null = null;
   private browser: ReturnType<Bonjour['find']> | null = null;
   private hosts: Map<string, TunnelHostInfo> = new Map();
+
+  // UDP beacon state
+  private beaconSocket: Socket | null = null;
+  private beaconTimer: ReturnType<typeof setInterval> | null = null;
+  private hostLastSeen: Map<string, number> = new Map();
+  private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private identity: LocalIdentity,
@@ -18,29 +37,37 @@ export class TunnelDiscovery extends EventEmitter {
   }
 
   start(): void {
-    this.bonjour = new Bonjour();
+    this.startMdns();
+    this.startBeacon();
+  }
 
-    // Publish our service
-    this.bonjour.publish({
-      name: `tm-${this.identity.instanceId.slice(0, 8)}`,
-      type: SERVICE_TYPE,
-      port: this.port,
-      txt: {
-        instanceId: this.identity.instanceId,
-        hostname: this.identity.hostname,
-        identityHash: this.identity.identityHash
-      }
-    });
+  // ── mDNS (works well on macOS, unreliable on Windows) ──
 
-    // Browse for peers
-    this.browser = this.bonjour.find({ type: SERVICE_TYPE }, (service: Service) => {
-      this.handleServiceFound(service);
-    });
+  private startMdns(): void {
+    try {
+      this.bonjour = new Bonjour();
 
-    // Handle service disappearance
-    this.browser.on('down', (service: Service) => {
-      this.handleServiceLost(service);
-    });
+      this.bonjour.publish({
+        name: `tm-${this.identity.instanceId.slice(0, 8)}`,
+        type: SERVICE_TYPE,
+        port: this.port,
+        txt: {
+          instanceId: this.identity.instanceId,
+          hostname: this.identity.hostname,
+          identityHash: this.identity.identityHash
+        }
+      });
+
+      this.browser = this.bonjour.find({ type: SERVICE_TYPE }, (service: Service) => {
+        this.handleServiceFound(service);
+      });
+
+      this.browser.on('down', (service: Service) => {
+        this.handleServiceLost(service);
+      });
+    } catch (err) {
+      console.error('[TunnelDiscovery] mDNS failed to start, relying on UDP beacon:', err);
+    }
   }
 
   private handleServiceFound(service: Service): void {
@@ -49,50 +76,159 @@ export class TunnelDiscovery extends EventEmitter {
 
     const { instanceId, hostname, identityHash } = txt;
     if (!instanceId || !identityHash) return;
-
-    // Skip own instance
     if (instanceId === this.identity.instanceId) return;
-
-    // Only show peers with matching identity
     if (identityHash !== this.identity.identityHash) return;
 
-    // Get address from DNS records (service.addresses), NOT referer.address
-    // referer.address is the network-level source of the mDNS packet which
-    // can be a gateway/router IP on cross-subnet or bridged networks.
-    // Prefer a routable IPv4 address, skip loopback and link-local.
     const addresses = service.addresses || [];
     const address = addresses.find(
       (a: string) => !a.includes(':') && !a.startsWith('127.') && !a.startsWith('169.254.')
     ) || addresses.find((a: string) => !a.includes(':')) || addresses[0];
 
     if (!address) {
-      console.log(`[TunnelDiscovery] No usable address for ${hostname} (${instanceId}), addresses: ${JSON.stringify(addresses)}`);
+      console.log(`[TunnelDiscovery] mDNS: no usable address for ${hostname} (${instanceId})`);
       return;
     }
 
-    console.log(`[TunnelDiscovery] Found peer ${hostname} at ${address}:${service.port} (addresses: ${JSON.stringify(addresses)})`);
+    console.log(`[TunnelDiscovery] mDNS: found ${hostname} at ${address}:${service.port}`);
+    this.registerHost(instanceId, hostname, identityHash, address, service.port);
+  }
+
+  private handleServiceLost(service: Service): void {
+    const txt = service.txt as Record<string, string> | undefined;
+    if (!txt?.instanceId) return;
+    const instanceId = txt.instanceId;
+    // Don't remove immediately — the beacon may still be alive.
+    // Let the sweep timer handle removal based on last-seen.
+  }
+
+  // ── UDP broadcast beacon (cross-platform fallback) ──
+
+  private startBeacon(): void {
+    try {
+      this.beaconSocket = createSocket({ type: 'udp4', reuseAddr: true });
+
+      this.beaconSocket.on('message', (msg, rinfo) => {
+        this.handleBeacon(msg, rinfo.address);
+      });
+
+      this.beaconSocket.on('error', (err) => {
+        console.error('[TunnelDiscovery] Beacon socket error:', err);
+      });
+
+      this.beaconSocket.bind(BEACON_PORT, () => {
+        this.beaconSocket!.setBroadcast(true);
+        console.log(`[TunnelDiscovery] Beacon listening on UDP ${BEACON_PORT}`);
+
+        // Start broadcasting
+        this.sendBeacon(); // Send immediately
+        this.beaconTimer = setInterval(() => this.sendBeacon(), BEACON_INTERVAL);
+      });
+
+      // Periodically sweep for timed-out hosts
+      this.sweepTimer = setInterval(() => this.sweepStaleHosts(), BEACON_INTERVAL);
+    } catch (err) {
+      console.error('[TunnelDiscovery] Failed to start beacon:', err);
+    }
+  }
+
+  private sendBeacon(): void {
+    if (!this.beaconSocket) return;
+
+    const payload: BeaconPayload = {
+      magic: BEACON_MAGIC,
+      instanceId: this.identity.instanceId,
+      hostname: this.identity.hostname,
+      identityHash: this.identity.identityHash,
+      port: this.port
+    };
+
+    const buf = Buffer.from(JSON.stringify(payload));
+
+    try {
+      this.beaconSocket.send(buf, 0, buf.length, BEACON_PORT, '255.255.255.255');
+    } catch {
+      // Send can fail if network is down, ignore
+    }
+  }
+
+  private handleBeacon(msg: Buffer, senderAddress: string): void {
+    let payload: BeaconPayload;
+    try {
+      payload = JSON.parse(msg.toString());
+    } catch {
+      return; // Not a valid beacon
+    }
+
+    if (payload.magic !== BEACON_MAGIC) return;
+    if (!payload.instanceId || !payload.identityHash) return;
+    if (payload.instanceId === this.identity.instanceId) return;
+    if (payload.identityHash !== this.identity.identityHash) return;
+
+    // Update last-seen timestamp
+    this.hostLastSeen.set(payload.instanceId, Date.now());
+
+    // Register or update host
+    const existing = this.hosts.get(payload.instanceId);
+    if (!existing) {
+      console.log(`[TunnelDiscovery] Beacon: found ${payload.hostname} at ${senderAddress}:${payload.port}`);
+    }
+
+    this.registerHost(
+      payload.instanceId,
+      payload.hostname,
+      payload.identityHash,
+      senderAddress,
+      payload.port
+    );
+  }
+
+  private sweepStaleHosts(): void {
+    const now = Date.now();
+    for (const [instanceId, lastSeen] of this.hostLastSeen) {
+      if (now - lastSeen > HOST_TIMEOUT) {
+        this.hostLastSeen.delete(instanceId);
+        if (this.hosts.has(instanceId)) {
+          console.log(`[TunnelDiscovery] Host timed out: ${instanceId}`);
+          this.hosts.delete(instanceId);
+          this.emit('host-lost', instanceId);
+        }
+      }
+    }
+  }
+
+  // ── Shared host registration ──
+
+  private registerHost(
+    instanceId: string,
+    hostname: string,
+    identityHash: string,
+    address: string,
+    port: number
+  ): void {
+    const existing = this.hosts.get(instanceId);
+
+    // Don't overwrite a connected/connecting host's status
+    if (existing && (existing.status === 'connected' || existing.status === 'connecting')) {
+      // Update address/port in case it changed, keep status
+      existing.address = address;
+      existing.port = port;
+      return;
+    }
 
     const host: TunnelHostInfo = {
       instanceId,
       hostname: hostname || 'unknown',
       identityHash,
       address,
-      port: service.port,
-      status: 'discovered'
+      port,
+      status: existing?.status || 'discovered'
     };
 
+    const isNew = !existing;
     this.hosts.set(instanceId, host);
-    this.emit('host-found', host);
-  }
 
-  private handleServiceLost(service: Service): void {
-    const txt = service.txt as Record<string, string> | undefined;
-    if (!txt?.instanceId) return;
-
-    const instanceId = txt.instanceId;
-    if (this.hosts.has(instanceId)) {
-      this.hosts.delete(instanceId);
-      this.emit('host-lost', instanceId);
+    if (isNew) {
+      this.emit('host-found', host);
     }
   }
 
@@ -101,6 +237,18 @@ export class TunnelDiscovery extends EventEmitter {
   }
 
   stop(): void {
+    if (this.beaconTimer) {
+      clearInterval(this.beaconTimer);
+      this.beaconTimer = null;
+    }
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer);
+      this.sweepTimer = null;
+    }
+    if (this.beaconSocket) {
+      try { this.beaconSocket.close(); } catch { /* ignore */ }
+      this.beaconSocket = null;
+    }
     if (this.browser) {
       this.browser.stop();
       this.browser = null;
@@ -110,5 +258,6 @@ export class TunnelDiscovery extends EventEmitter {
       this.bonjour = null;
     }
     this.hosts.clear();
+    this.hostLastSeen.clear();
   }
 }
