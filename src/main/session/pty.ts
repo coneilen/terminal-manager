@@ -49,7 +49,6 @@ export class PtySession extends EventEmitter {
 
   start(): void {
     const shell = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
-    const command = this.options.type === 'claude' ? 'claude' : 'copilot';
     const cwd = resolveWorkingDir(this.options.workingDir);
 
     // Spawn a shell and then run the command
@@ -68,17 +67,38 @@ export class PtySession extends EventEmitter {
     this._isRunning = true;
     this._isKilled = false;
 
-    // Send the command after a brief delay to let the shell initialize
-    this.startupTimeout = setTimeout(() => {
-      if (this.ptyProcess && !this._isKilled) {
-        if (this.options.type === 'claude' && this.options.resume) {
-          // Try --continue, fall back to plain claude if it fails
-          this.ptyProcess.write(`${command} --continue || ${command}\r`);
-        } else {
-          this.ptyProcess.write(`${command}\r`);
-        }
+    // Wait for the shell to finish initializing before sending the command.
+    // PowerShell on Windows can take several seconds to start (banner, profile
+    // scripts, etc.). We debounce: wait for a 300ms gap in output, which
+    // corresponds to the shell being idle at its prompt.
+    let commandSent = false;
+    const sendCommand = () => {
+      if (commandSent || !this.ptyProcess || this._isKilled) return;
+      commandSent = true;
+      const command = this.options.type === 'claude' ? 'claude' : 'copilot';
+      if (this.options.type === 'claude' && this.options.resume) {
+        this.ptyProcess.write(`${command} --continue || ${command}\r`);
+      } else {
+        this.ptyProcess.write(`${command}\r`);
       }
-    }, 100);
+    };
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const promptDisposable = this.ptyProcess.onData(() => {
+      if (commandSent) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        promptDisposable.dispose();
+        sendCommand();
+      }, 300);
+    });
+
+    // Fallback: send after 5s even if no output detected
+    this.startupTimeout = setTimeout(() => {
+      promptDisposable.dispose();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      sendCommand();
+    }, 5000);
 
     this.dataDisposable = this.ptyProcess.onData((data) => {
       if (!this._isKilled) {
