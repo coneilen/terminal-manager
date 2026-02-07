@@ -4,7 +4,10 @@ An Electron desktop app for managing multiple Claude Code and GitHub Copilot ter
 
 ## Features
 
+- **Auto-Discovery**: Automatically detects Claude CLI and Copilot CLI sessions running on your machine — new sessions appear in the sidebar within seconds, no manual import needed
+- **Git Worktree Support**: Sessions are grouped by working directory with full worktree path resolution, so multiple worktrees of the same repo each get their own folder group
 - **Multiple Sessions**: Run Claude Code and GitHub Copilot sessions side-by-side with tabs
+- **Lazy Activation**: Sessions stay dormant until you click them — PTYs only start on demand, keeping resource usage low even with many saved sessions
 - **LAN Tunneling**: Discover and control terminal sessions on other machines on your local network
 - **Session Metadata**: View model, context usage, git branch, working directory, and current task at a glance
 - **Session Persistence**: Sessions are saved and automatically restored on app restart
@@ -12,6 +15,7 @@ An Electron desktop app for managing multiple Claude Code and GitHub Copilot ter
 - **Import Sessions**: Import existing Claude sessions from `~/.claude/history.jsonl`
 - **Inactive Sessions**: Closed sessions remain in the sidebar and can be restarted with a click
 - **Keyboard Shortcuts**: Full keyboard navigation support
+- **Terminal Context Menu**: Right-click for copy, paste, select all, and clear terminal
 
 ## Installation
 
@@ -39,7 +43,19 @@ npm run dev
 3. Choose working directory using the folder picker
 4. Click **Create Session**
 
+### Auto-Discovery
+
+Terminal Manager automatically detects new CLI sessions as they're created:
+
+- **Claude CLI** sessions are discovered by polling `~/.claude/projects/` and `~/.claude/history.jsonl`
+- **Copilot CLI** sessions are discovered by polling `~/.copilot/session-state/`
+- New sessions appear in the sidebar within ~10 seconds
+- Sessions are deduplicated by working directory — multiple Claude session UUIDs for the same project show as one entry
+- Works cross-platform (macOS, Linux, Windows)
+
 ### Importing Claude Sessions
+
+You can also manually import existing sessions:
 
 1. Click **Import Claude** in the sidebar
 2. Browse existing sessions from your Claude history
@@ -95,10 +111,14 @@ Terminal Manager automatically discovers other instances running on your local n
 
 ### Managing Sessions
 
+Sessions live in the sidebar grouped by working directory. Clicking a session opens it as a tab and starts the PTY.
+
 - **Switch tabs**: Click tab or use **Ctrl+1-9**
-- **Close session**: **Ctrl+W** or click stop button (keeps in sidebar)
-- **Remove session**: Click X button (permanently removes)
-- **Restart inactive session**: Click on dimmed session in sidebar
+- **Close tab**: **Ctrl+W** or click X on tab (session stays in sidebar for later)
+- **Stop session**: Click stop button in sidebar (terminates the PTY)
+- **Remove session**: Click X button in sidebar (permanently removes)
+- **Restart inactive session**: Click on a dimmed session in sidebar
+- **Collapse folders**: Click folder headers to collapse/expand session groups
 
 ## Keyboard Shortcuts
 
@@ -109,7 +129,10 @@ Terminal Manager automatically discovers other instances running on your local n
 | F3 | Next tab |
 | F4 | Previous tab |
 | Ctrl+1-9 | Switch to tab N |
-| Ctrl+W | Close current session |
+| Ctrl+W | Close current tab |
+| Ctrl+Shift+C | Copy selection |
+| Ctrl+Shift+V | Paste from clipboard |
+| Ctrl+Shift+A | Select all |
 | Ctrl+Q | Quit app |
 
 ## Development
@@ -147,6 +170,7 @@ src/
 │   │   ├── metadata.ts      # Output parsing
 │   │   ├── persistence.ts   # Save/restore sessions
 │   │   ├── importer.ts      # Import from ~/.claude
+│   │   ├── watcher.ts       # Auto-discovery (Claude + Copilot)
 │   │   └── types.ts
 │   └── tunnel/              # LAN tunneling
 │       ├── manager.ts       # Tunnel orchestrator
