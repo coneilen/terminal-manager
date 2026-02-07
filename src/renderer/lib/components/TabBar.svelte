@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { sessions, activeSessionId, setActiveSession } from '../stores/sessions';
+  import { openedSessions, activeSessionId, setActiveSession } from '../stores/sessions';
   import { sidebarContext, selectedMachineId } from '../stores/tunnels';
 
   const dispatch = createEventDispatcher<{
@@ -8,12 +8,11 @@
     newTab: void;
   }>();
 
-  // Filter tabs based on sidebar context
-  $: filteredSessions = $sessions.filter(session => {
+  // Filter opened tabs based on sidebar context
+  $: filteredSessions = $openedSessions.filter(session => {
     if ($sidebarContext === 'local') {
       return !session.id.startsWith('tunnel:');
     }
-    // Remote: show sessions matching selected machine
     if ($selectedMachineId) {
       return session.id.startsWith(`tunnel:${$selectedMachineId}:`);
     }

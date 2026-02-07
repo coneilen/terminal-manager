@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { homedir } from 'os';
 
+// Each Terminal component adds a session:output listener, so the count
+// scales with the number of sessions. Raise the limit to avoid spurious warnings.
+ipcRenderer.setMaxListeners(100);
+
 export interface Session {
   id: string;
   name: string;
@@ -52,7 +56,6 @@ export interface Api {
   removeSession: (id: string) => Promise<{ success: boolean; error?: string }>;
   restartSession: (id: string) => Promise<{ success: boolean; session?: Session; error?: string }>;
   listSessions: () => Promise<Session[]>;
-  activateSessions: () => Promise<void>;
   getSession: (id: string) => Promise<Session | undefined>;
 
   // PTY communication
@@ -126,8 +129,6 @@ const api: Api = {
   restartSession: (id) => ipcRenderer.invoke('session:restart', id),
 
   listSessions: () => ipcRenderer.invoke('session:list'),
-
-  activateSessions: () => ipcRenderer.invoke('session:activate'),
 
   getSession: (id) => ipcRenderer.invoke('session:get', id),
 

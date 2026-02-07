@@ -33,7 +33,6 @@ export function setupIpcHandlers(sessionManager: SessionManager, tunnelManager?:
     'session:remove',
     'session:restart',
     'session:list',
-    'session:activate',
     'session:get',
     'dialog:openFolder',
     'session:getImportable',
@@ -156,11 +155,6 @@ export function setupIpcHandlers(sessionManager: SessionManager, tunnelManager?:
         ? session.createdAt.toISOString()
         : session.createdAt
     }));
-  });
-
-  // Renderer signals it has mounted Terminal components and is ready for output
-  ipcMain.handle('session:activate', async () => {
-    sessionManager.activateSessions();
   });
 
   // Get a single session

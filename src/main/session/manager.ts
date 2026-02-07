@@ -147,32 +147,6 @@ export class SessionManager extends EventEmitter {
     }
   }
 
-  // Start PTYs for all dormant sessions. Called once the renderer is ready.
-  activateSessions(): void {
-    for (const [id, managed] of this.sessions) {
-      if (managed.pty) continue; // already running
-
-      try {
-        const ptySession = new PtySession(id, {
-          type: managed.session.type,
-          workingDir: managed.session.metadata.workingDir,
-          resume: true
-        });
-
-        managed.pty = ptySession;
-        this.setupPtyHandlers(id, ptySession);
-        ptySession.start();
-
-        managed.session.status = 'active';
-        this.sendSessionUpdate(managed.session);
-      } catch (err) {
-        console.error(`Failed to activate session ${id}:`, err);
-        removeSavedSession(id);
-        this.sessions.delete(id);
-      }
-    }
-  }
-
   startAutoDiscovery(): void {
     const knownWorkingDirs = new Set<string>();
     for (const [, managed] of this.sessions) {

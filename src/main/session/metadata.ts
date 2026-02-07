@@ -33,7 +33,8 @@ export function extractGitBranch(workingDir: string): string {
     const branch = execSync('git rev-parse --abbrev-ref HEAD', {
       cwd: expanded,
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
     }).trim();
 
     return branch;
@@ -145,7 +146,8 @@ export function extractGitRoot(workingDir: string): string {
     const commonDir = execSync('git rev-parse --git-common-dir', {
       cwd: expanded,
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
     }).trim();
 
     // Resolve to absolute path (commonDir can be relative like ".git")

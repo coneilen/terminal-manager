@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { createTerminal, type TerminalInstance } from '../utils/terminal';
   import TerminalContextMenu from './TerminalContextMenu.svelte';
+  import { activeSessionId } from '../stores/sessions';
 
   export let sessionId: string;
 
@@ -10,6 +11,12 @@
   let cleanupOutput: (() => void) | null = null;
   let cleanupFunctions: (() => void)[] = [];
   let isDragging = false;
+
+  // Track when this terminal was last activated so we can auto-scroll
+  // to bottom while initial output streams in (e.g. claude --continue)
+  let activatedAt = 0;
+  let scrollTimer: ReturnType<typeof setTimeout>;
+  const ACTIVATION_SCROLL_WINDOW_MS = 8000;
 
   let contextMenu: { x: number; y: number } | null = null;
   let hasSelection = false;
@@ -66,6 +73,20 @@
       cleanupOutput = window.api.onSessionOutput((id, data) => {
         if (id === sessionId && terminalInstance) {
           terminalInstance.terminal.write(data);
+
+          // During the activation window, keep scrolling to bottom as output
+          // streams in (e.g. claude --continue replaying conversation history).
+          // Debounce so we scroll once output settles, then refit.
+          if (Date.now() - activatedAt < ACTIVATION_SCROLL_WINDOW_MS) {
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(() => {
+              if (terminalInstance) {
+                terminalInstance.fitAddon.fit();
+                terminalInstance.terminal.scrollToBottom();
+                terminalInstance.terminal.focus();
+              }
+            }, 150);
+          }
         }
       });
 
@@ -75,6 +96,7 @@
   });
 
   onDestroy(() => {
+    clearTimeout(scrollTimer);
     if (terminalInstance) {
       terminalInstance.dispose();
     }
@@ -123,6 +145,21 @@
     if (terminalInstance) {
       terminalInstance.terminal.focus();
     }
+  }
+
+  // When this terminal becomes active, mark activation time and do an
+  // immediate scroll-to-bottom after the DOM settles. The output handler
+  // above will keep scrolling as data streams in during the activation window.
+  $: if ($activeSessionId === sessionId && terminalInstance) {
+    activatedAt = Date.now();
+    const inst = terminalInstance;
+    tick().then(() => {
+      requestAnimationFrame(() => {
+        inst.fitAddon.fit();
+        inst.terminal.scrollToBottom();
+        inst.terminal.focus();
+      });
+    });
   }
 
   export function focus() {
