@@ -5,6 +5,7 @@ export type SessionStatus = 'active' | 'idle' | 'closed';
 
 export interface SessionMetadata {
   workingDir: string;
+  gitRoot: string;
   gitBranch: string;
   model: string;
   contextUsed: string;
@@ -41,6 +42,13 @@ export const activeSession = derived(
 export function addSession(session: Session): void {
   sessions.update((s) => [...s, session]);
   activeSessionId.set(session.id);
+}
+
+export function addSessionQuiet(session: Session): void {
+  sessions.update((s) => {
+    if (s.some((existing) => existing.id === session.id)) return s;
+    return [...s, session];
+  });
 }
 
 export function removeSession(id: string): void {

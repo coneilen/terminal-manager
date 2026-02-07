@@ -2,6 +2,7 @@
     "sessions": [
       { "type": "claude", "folder": "~/depot/CrossPlatform3", "name": "CrossPlatform3" },
       { "type": "claude", "folder": "~/depot/CrossPlatform4", "name": "CrossPlatform4" },
+      { "type": "claude", "folder": "~/depot/CrossPlatform5", "name": "CrossPlatform5" },
       { "type": "claude", "folder": "~/depot/AndroidClient", "name": "AndroidClient" },
       { "type": "claude", "folder": "~/depot/AndroidClient.prompts", "name": "AndroidClient.prompts"},
       { "type": "claude", "folder": "~/dev/ccc-workspace/", "name": "ccc-workspace" },

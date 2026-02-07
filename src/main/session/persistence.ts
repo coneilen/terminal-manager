@@ -25,12 +25,11 @@ export function loadSavedSessions(): SavedSession[] {
     const data = readFileSync(configPath, 'utf-8');
     const sessions: SavedSession[] = JSON.parse(data);
 
-    // Deduplicate: keep only the latest session per workingDir/type combination
-    // (later entries in the array are considered newer)
+    // Deduplicate by session ID (UUIDs are unique). Multiple sessions can
+    // legitimately share the same workingDir and type (different models, etc.).
     const seen = new Map<string, SavedSession>();
     for (const session of sessions) {
-      const key = `${session.type}:${session.workingDir}`;
-      seen.set(key, session); // Overwrites earlier entries, keeping the latest
+      seen.set(session.id, session);
     }
 
     const deduped = Array.from(seen.values());
@@ -66,11 +65,8 @@ export function saveSessions(sessions: SavedSession[]): void {
 export function addSavedSession(session: SavedSession): void {
   let sessions = loadSavedSessions();
 
-  // Remove any existing session with the same workingDir and type
-  // This keeps only the latest session per folder/type combination
-  sessions = sessions.filter(s =>
-    !(s.workingDir === session.workingDir && s.type === session.type)
-  );
+  // Remove any existing entry with the same ID (in case of re-add)
+  sessions = sessions.filter(s => s.id !== session.id);
 
   // Add the new session
   sessions.push(session);

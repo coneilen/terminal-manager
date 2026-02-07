@@ -8,6 +8,7 @@ interface Session {
   status: 'active' | 'idle' | 'closed';
   metadata: {
     workingDir: string;
+    gitRoot: string;
     gitBranch: string;
     model: string;
     contextUsed: string;
@@ -50,6 +51,7 @@ interface Api {
   removeSession: (id: string) => Promise<{ success: boolean; error?: string }>;
   restartSession: (id: string) => Promise<{ success: boolean; session?: Session; error?: string }>;
   listSessions: () => Promise<Session[]>;
+  activateSessions: () => Promise<void>;
   getSession: (id: string) => Promise<Session | undefined>;
   getImportableSessions: () => Promise<ImportableSession[]>;
   importSession: (project: string, name?: string) => Promise<{ success: boolean; session?: Session; error?: string }>;

@@ -7,7 +7,9 @@
   }>();
 
   let importableSessions: ImportableSession[] = [];
+  let selectedIds: Set<string> = new Set();
   let loading = true;
+  let importing = false;
   let error = '';
 
   onMount(async () => {
@@ -21,8 +23,36 @@
     }
   });
 
-  function handleImport(session: ImportableSession) {
-    dispatch('import', { project: session.project, name: session.suggestedName });
+  $: allSelected = importableSessions.length > 0 && selectedIds.size === importableSessions.length;
+  $: someSelected = selectedIds.size > 0;
+
+  function toggleSelect(sessionId: string) {
+    if (selectedIds.has(sessionId)) {
+      selectedIds.delete(sessionId);
+    } else {
+      selectedIds.add(sessionId);
+    }
+    selectedIds = selectedIds;
+  }
+
+  function toggleAll() {
+    if (allSelected) {
+      selectedIds = new Set();
+    } else {
+      selectedIds = new Set(importableSessions.map(s => s.sessionId));
+    }
+  }
+
+  async function handleImportSelected() {
+    importing = true;
+    const toImport = importableSessions.filter(s => selectedIds.has(s.sessionId));
+    for (const session of toImport) {
+      dispatch('import', { project: session.project, name: session.suggestedName });
+      // Small delay so each session gets created sequentially
+      await new Promise(r => setTimeout(r, 100));
+    }
+    importing = false;
+    dispatch('close');
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -59,6 +89,10 @@
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
   }
+
+  function folderName(path: string): string {
+    return path.split('/').filter(Boolean).pop() || path;
+  }
 </script>
 
 <div
@@ -70,7 +104,7 @@
   aria-labelledby="dialog-title"
 >
   <div
-    class="bg-terminal-sidebar border border-terminal-border rounded-lg shadow-xl w-[32rem] max-w-[90vw] max-h-[80vh] flex flex-col"
+    class="bg-terminal-sidebar border border-terminal-border rounded-lg shadow-xl w-[36rem] max-w-[90vw] max-h-[80vh] flex flex-col"
     tabindex="-1"
   >
     <div class="px-6 py-4 border-b border-terminal-border">
@@ -92,53 +126,87 @@
           No new sessions to import
         </div>
       {:else}
+        <!-- Select all header -->
+        <div class="px-6 py-2 border-b border-terminal-border bg-terminal-bg bg-opacity-50 flex items-center gap-3 sticky top-0">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              on:change={toggleAll}
+              class="accent-terminal-claude"
+            />
+            <span class="text-xs text-terminal-muted">
+              {#if allSelected}
+                Deselect all
+              {:else}
+                Select all ({importableSessions.length})
+              {/if}
+            </span>
+          </label>
+          {#if someSelected}
+            <span class="text-xs text-terminal-claude ml-auto">{selectedIds.size} selected</span>
+          {/if}
+        </div>
+
         <div class="divide-y divide-terminal-border">
-          {#each importableSessions as session}
-            <div class="px-6 py-3 hover:bg-terminal-border hover:bg-opacity-30 transition-colors">
-              <div class="flex items-start justify-between gap-4">
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2">
-                    <span class="font-medium text-terminal-text">{session.suggestedName}</span>
-                    {#if session.isActive}
-                      <span class="px-1.5 py-0.5 text-xs bg-terminal-success bg-opacity-20 text-terminal-success rounded">
-                        Active
-                      </span>
-                    {/if}
-                  </div>
-                  <div class="text-xs text-terminal-muted mt-1 truncate" title={session.project}>
-                    {shortenPath(session.project)}
-                  </div>
-                  {#if session.lastMessage}
-                    <div class="text-xs text-terminal-muted mt-1 truncate">
-                      "{session.lastMessage}"
-                    </div>
+          {#each importableSessions as session (session.sessionId)}
+            <label
+              class="px-6 py-3 hover:bg-terminal-border hover:bg-opacity-30 transition-colors flex items-start gap-3 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={selectedIds.has(session.sessionId)}
+                on:change={() => toggleSelect(session.sessionId)}
+                class="mt-1 accent-terminal-claude"
+              />
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-terminal-text">{folderName(session.project)}</span>
+                  {#if session.isActive}
+                    <span class="px-1.5 py-0.5 text-xs bg-terminal-success bg-opacity-20 text-terminal-success rounded">
+                      Active
+                    </span>
                   {/if}
-                  <div class="text-xs text-terminal-muted mt-1">
-                    {formatTime(session.timestamp)}
-                  </div>
+                  <span class="text-xs text-terminal-muted ml-auto shrink-0">{formatTime(session.timestamp)}</span>
                 </div>
-                <button
-                  on:click={() => handleImport(session)}
-                  class="px-3 py-1.5 text-sm bg-terminal-claude bg-opacity-20 text-terminal-claude
-                         hover:bg-opacity-30 rounded transition-colors shrink-0"
-                >
-                  Import
-                </button>
+                <div class="text-xs text-terminal-muted mt-1 truncate" title={session.project}>
+                  {shortenPath(session.project)}
+                </div>
+                {#if session.lastMessage}
+                  <div class="text-xs text-terminal-muted mt-1 truncate">
+                    "{session.lastMessage}"
+                  </div>
+                {/if}
               </div>
-            </div>
+            </label>
           {/each}
         </div>
       {/if}
     </div>
 
-    <div class="px-6 py-4 border-t border-terminal-border flex justify-end">
+    <div class="px-6 py-4 border-t border-terminal-border flex justify-between items-center">
       <button
         type="button"
         on:click={() => dispatch('close')}
         class="px-4 py-2 text-sm font-medium text-terminal-muted hover:text-terminal-text transition-colors"
       >
-        Close
+        Cancel
       </button>
+      {#if importableSessions.length > 0}
+        <button
+          type="button"
+          on:click={handleImportSelected}
+          disabled={!someSelected || importing}
+          class="px-4 py-2 text-sm font-medium bg-terminal-claude text-terminal-bg rounded-md
+                 hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {#if importing}
+            Importing...
+          {:else}
+            Import {selectedIds.size > 0 ? selectedIds.size : ''} Session{selectedIds.size !== 1 ? 's' : ''}
+          {/if}
+        </button>
+      {/if}
     </div>
   </div>
 </div>

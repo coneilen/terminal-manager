@@ -40,6 +40,37 @@
   -webkit-app-region: no-drag;
 }
 
+/* Sidebar resize handle */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background-color 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Grip dots — visible by default as a subtle hint */
+.sidebar-resize-handle::after {
+  content: '';
+  width: 2px;
+  height: 32px;
+  border-radius: 1px;
+  background-color: #414868;
+  transition: background-color 150ms ease, height 150ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:active::after {
+  background-color: #7aa2f7;
+  height: 48px;
+}
+
 /* Focus styles */
 *:focus {
   outline: none;

@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve, dirname } from 'path';
 import { homedir } from 'os';
 import type { SessionMetadata } from './types';
 
@@ -139,9 +139,36 @@ export function extractMetadataFromOutput(
   return updates;
 }
 
+export function extractGitRoot(workingDir: string): string {
+  try {
+    const expanded = expandPath(workingDir);
+    const commonDir = execSync('git rev-parse --git-common-dir', {
+      cwd: expanded,
+      encoding: 'utf-8',
+      timeout: 5000
+    }).trim();
+
+    // Resolve to absolute path (commonDir can be relative like ".git")
+    const absolute = commonDir.startsWith('/')
+      ? commonDir
+      : resolve(expanded, commonDir);
+
+    // The common dir is the .git directory of the main repo.
+    // Strip trailing /.git to get the repo root path.
+    const normalized = resolve(absolute);
+    if (normalized.endsWith('/.git')) {
+      return normalized.slice(0, -5);
+    }
+    return dirname(normalized);
+  } catch {
+    return workingDir;
+  }
+}
+
 export function createInitialMetadata(workingDir: string): SessionMetadata {
   return {
     workingDir,
+    gitRoot: extractGitRoot(workingDir),
     gitBranch: extractGitBranch(workingDir),
     model: '',
     contextUsed: '',

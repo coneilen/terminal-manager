@@ -10,6 +10,7 @@
     sessions,
     activeSessionId,
     addSession,
+    addSessionQuiet,
     removeSession,
     updateSession,
     setActiveSession,
@@ -98,16 +99,27 @@
     });
 
     const cleanupUpdate = window.api.onSessionUpdate((session) => {
-      updateSession(session);
+      let found = false;
+      sessions.subscribe((s) => {
+        found = s.some((existing) => existing.id === session.id);
+      })();
+      if (found) {
+        updateSession(session);
+      } else {
+        addSessionQuiet(session);
+      }
     });
 
     cleanupFunctions.push(cleanupExit, cleanupUpdate);
 
-    // Load existing sessions
+    // Load existing sessions, then start PTYs once Terminal components are mounted
     window.api.listSessions().then((existingSessions) => {
       existingSessions.forEach((session) => {
         addSession(session);
       });
+      // Terminal components are now mounted with onSessionOutput listeners.
+      // Signal the main process to start PTYs so no output is lost.
+      window.api.activateSessions();
     });
 
     // Set up tunnel event listeners
@@ -215,7 +227,6 @@
     if (result.success && result.session) {
       addSession(result.session);
     }
-    showImportDialog = false;
   }
 
   async function handleTunnelConnect(instanceId: string) {

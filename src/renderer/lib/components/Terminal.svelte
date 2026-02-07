@@ -8,6 +8,7 @@
   let containerRef: HTMLDivElement;
   let terminalInstance: TerminalInstance | null = null;
   let cleanupOutput: (() => void) | null = null;
+  let cleanupFunctions: (() => void)[] = [];
   let isDragging = false;
 
   let contextMenu: { x: number; y: number } | null = null;
@@ -46,6 +47,17 @@
     terminalInstance?.terminal.clear();
   }
 
+  function fitTerminal() {
+    if (!terminalInstance) return;
+    try {
+      terminalInstance.fitAddon.fit();
+      const { cols, rows } = terminalInstance.terminal;
+      window.api.resizeSession(sessionId, cols, rows);
+    } catch {
+      // Ignore fit errors during transitions
+    }
+  }
+
   onMount(() => {
     if (containerRef) {
       terminalInstance = createTerminal(containerRef, sessionId);
@@ -69,6 +81,7 @@
     if (cleanupOutput) {
       cleanupOutput();
     }
+    cleanupFunctions.forEach(fn => fn());
   });
 
   function handleDragOver(e: DragEvent) {

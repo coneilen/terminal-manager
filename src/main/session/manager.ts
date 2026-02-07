@@ -3,18 +3,21 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import { PtySession } from './pty';
 import { createInitialMetadata, extractMetadataFromOutput } from './metadata';
+import { existsSync } from 'fs';
 import { addSavedSession, removeSavedSession, loadSavedSessions } from './persistence';
+import { SessionWatcher, type DiscoveredSession } from './watcher';
 import type { Session, SessionCreateOptions, SessionStatus } from './types';
 
 interface ManagedSession {
   session: Session;
-  pty: PtySession;
+  pty: PtySession | null;
 }
 
 export class SessionManager extends EventEmitter {
   private sessions: Map<string, ManagedSession> = new Map();
   private sessionCounter: Map<string, number> = new Map();
   private isShuttingDown = false;
+  private watcher: SessionWatcher | null = null;
 
   constructor(private mainWindow: BrowserWindow) {
     super();
@@ -56,6 +59,7 @@ export class SessionManager extends EventEmitter {
     }
 
     this.sessions.set(id, { session, pty: ptySession });
+    this.watcher?.addKnownSession(id);
     this.setupPtyHandlers(id, ptySession);
 
     // Start the PTY process
@@ -70,7 +74,7 @@ export class SessionManager extends EventEmitter {
       return false;
     }
 
-    managed.pty.kill();
+    managed.pty?.kill();
     managed.session.status = 'closed';
     this.sendSessionUpdate(managed.session);
     // Don't delete from sessions map - keep it as inactive
@@ -82,9 +86,10 @@ export class SessionManager extends EventEmitter {
   remove(id: string): boolean {
     const managed = this.sessions.get(id);
     if (managed) {
-      managed.pty.kill();
+      managed.pty?.kill();
       this.sessions.delete(id);
     }
+    this.watcher?.removeKnownSession(id);
     removeSavedSession(id);
     return true;
   }
@@ -97,7 +102,7 @@ export class SessionManager extends EventEmitter {
     }
 
     // Kill old PTY if still somehow running
-    if (managed.pty.isRunning) {
+    if (managed.pty?.isRunning) {
       managed.pty.kill();
     }
 
@@ -118,31 +123,110 @@ export class SessionManager extends EventEmitter {
     return managed.session;
   }
 
-  // Load saved sessions and restore them
+  // Register saved sessions as dormant (no PTY) so they appear in listSessions().
+  // Call activateSessions() after the renderer is ready to start PTYs.
   restoreSessions(): void {
     const saved = loadSavedSessions();
     for (const savedSession of saved) {
-      this.create({
+      if (!existsSync(savedSession.workingDir)) {
+        console.warn(`Skipping session ${savedSession.id}: working dir missing (${savedSession.workingDir})`);
+        removeSavedSession(savedSession.id);
+        continue;
+      }
+
+      const session: Session = {
         id: savedSession.id,
-        type: savedSession.type,
-        workingDir: savedSession.workingDir,
         name: savedSession.name,
-        resume: true
-      });
+        type: savedSession.type,
+        status: 'closed',
+        metadata: createInitialMetadata(savedSession.workingDir),
+        createdAt: new Date()
+      };
+
+      this.sessions.set(savedSession.id, { session, pty: null });
     }
+  }
+
+  // Start PTYs for all dormant sessions. Called once the renderer is ready.
+  activateSessions(): void {
+    for (const [id, managed] of this.sessions) {
+      if (managed.pty) continue; // already running
+
+      try {
+        const ptySession = new PtySession(id, {
+          type: managed.session.type,
+          workingDir: managed.session.metadata.workingDir,
+          resume: true
+        });
+
+        managed.pty = ptySession;
+        this.setupPtyHandlers(id, ptySession);
+        ptySession.start();
+
+        managed.session.status = 'active';
+        this.sendSessionUpdate(managed.session);
+      } catch (err) {
+        console.error(`Failed to activate session ${id}:`, err);
+        removeSavedSession(id);
+        this.sessions.delete(id);
+      }
+    }
+  }
+
+  startAutoDiscovery(): void {
+    this.watcher = new SessionWatcher(this.sessions.keys());
+
+    this.watcher.on('session-discovered', (discovered: DiscoveredSession) => {
+      // Skip sessions with invalid working directories
+      if (!existsSync(discovered.project)) {
+        return;
+      }
+
+      // Skip if we already have a session for this working directory
+      for (const [, managed] of this.sessions) {
+        if (managed.session.metadata.workingDir === discovered.project) {
+          return;
+        }
+      }
+
+      // Register as dormant (closed, no PTY) — user clicks to start
+      const session: Session = {
+        id: discovered.sessionId,
+        name: discovered.name,
+        type: 'claude',
+        status: 'closed',
+        metadata: createInitialMetadata(discovered.project),
+        createdAt: new Date()
+      };
+
+      this.sessions.set(discovered.sessionId, { session, pty: null });
+      this.watcher?.addKnownSession(discovered.sessionId);
+
+      addSavedSession({
+        id: discovered.sessionId,
+        name: discovered.name,
+        type: 'claude',
+        workingDir: discovered.project
+      });
+
+      this.sendSessionUpdate(session);
+    });
+
+    this.watcher.start();
   }
 
   closeAll(): void {
     this.isShuttingDown = true;
+    this.watcher?.stop();
     for (const [, managed] of this.sessions) {
-      managed.pty.kill();
+      managed.pty?.kill();
     }
     this.sessions.clear();
   }
 
   write(id: string, data: string): boolean {
     const managed = this.sessions.get(id);
-    if (!managed || !managed.pty.isRunning) {
+    if (!managed?.pty?.isRunning) {
       return false;
     }
 
@@ -152,7 +236,7 @@ export class SessionManager extends EventEmitter {
 
   resize(id: string, cols: number, rows: number): boolean {
     const managed = this.sessions.get(id);
-    if (!managed || !managed.pty.isRunning) {
+    if (!managed?.pty?.isRunning) {
       return false;
     }
 
