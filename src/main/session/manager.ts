@@ -174,7 +174,11 @@ export class SessionManager extends EventEmitter {
   }
 
   startAutoDiscovery(): void {
-    this.watcher = new SessionWatcher(this.sessions.keys());
+    const knownWorkingDirs = new Set<string>();
+    for (const [, managed] of this.sessions) {
+      knownWorkingDirs.add(managed.session.metadata.workingDir);
+    }
+    this.watcher = new SessionWatcher(this.sessions.keys(), knownWorkingDirs);
 
     this.watcher.on('session-discovered', (discovered: DiscoveredSession) => {
       // Skip sessions with invalid working directories
@@ -182,18 +186,11 @@ export class SessionManager extends EventEmitter {
         return;
       }
 
-      // Skip if we already have a session for this working directory
-      for (const [, managed] of this.sessions) {
-        if (managed.session.metadata.workingDir === discovered.project) {
-          return;
-        }
-      }
-
       // Register as dormant (closed, no PTY) — user clicks to start
       const session: Session = {
         id: discovered.sessionId,
         name: discovered.name,
-        type: 'claude',
+        type: discovered.type,
         status: 'closed',
         metadata: createInitialMetadata(discovered.project),
         createdAt: new Date()
@@ -201,11 +198,12 @@ export class SessionManager extends EventEmitter {
 
       this.sessions.set(discovered.sessionId, { session, pty: null });
       this.watcher?.addKnownSession(discovered.sessionId);
+      this.watcher?.addKnownWorkingDir(discovered.project);
 
       addSavedSession({
         id: discovered.sessionId,
         name: discovered.name,
-        type: 'claude',
+        type: discovered.type,
         workingDir: discovered.project
       });
 
