@@ -9,10 +9,13 @@
   import {
     sessions,
     activeSessionId,
+    openedSessions,
     addSession,
+    addSessionQuiet,
     removeSession,
     updateSession,
     setActiveSession,
+    closeTab,
     switchToNextSession,
     switchToPreviousSession,
     switchToSessionByIndex
@@ -58,7 +61,7 @@
       else if (e.ctrlKey && e.key === 'w') {
         e.preventDefault();
         if ($activeSessionId) {
-          handleCloseSession($activeSessionId);
+          closeTab($activeSessionId);
         }
       }
       // Ctrl+1-9 - Switch to tab N
@@ -98,15 +101,23 @@
     });
 
     const cleanupUpdate = window.api.onSessionUpdate((session) => {
-      updateSession(session);
+      let found = false;
+      sessions.subscribe((s) => {
+        found = s.some((existing) => existing.id === session.id);
+      })();
+      if (found) {
+        updateSession(session);
+      } else {
+        addSessionQuiet(session);
+      }
     });
 
     cleanupFunctions.push(cleanupExit, cleanupUpdate);
 
-    // Load existing sessions
+    // Load existing sessions as dormant — PTYs start when user clicks a session
     window.api.listSessions().then((existingSessions) => {
       existingSessions.forEach((session) => {
-        addSession(session);
+        addSessionQuiet(session);
       });
     });
 
@@ -215,7 +226,6 @@
     if (result.success && result.session) {
       addSession(result.session);
     }
-    showImportDialog = false;
   }
 
   async function handleTunnelConnect(instanceId: string) {
@@ -266,12 +276,12 @@
   <!-- Main content area -->
   <div class="flex-1 flex flex-col min-w-0">
     <!-- Tab bar -->
-    <TabBar on:closeTab={(e) => handleCloseSession(e.detail)} on:newTab={() => (showNewSessionDialog = true)} />
+    <TabBar on:closeTab={(e) => closeTab(e.detail)} on:newTab={() => (showNewSessionDialog = true)} />
 
-    <!-- Terminal area -->
+    <!-- Terminal area — only rendered for opened sessions -->
     <div class="flex-1 min-h-0">
       {#if $activeSessionId}
-        {#each $sessions as session (session.id)}
+        {#each $openedSessions as session (session.id)}
           <div class="h-full" class:hidden={session.id !== $activeSessionId}>
             <Terminal sessionId={session.id} />
           </div>
@@ -280,7 +290,7 @@
         <div class="h-full flex items-center justify-center text-terminal-muted">
           <div class="text-center">
             <p class="text-lg mb-2">No active sessions</p>
-            <p class="text-sm">Press <kbd class="px-2 py-1 bg-terminal-sidebar rounded">F2</kbd> to create a new session</p>
+            <p class="text-sm">Press <kbd class="px-2 py-1 bg-terminal-sidebar rounded">F2</kbd> to create a new session or click one in the sidebar</p>
           </div>
         </div>
       {/if}

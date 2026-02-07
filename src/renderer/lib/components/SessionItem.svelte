@@ -6,6 +6,26 @@
   export let active = false;
   export let collapsed = false;
 
+  let acknowledged = false;
+  let prevWaiting = false;
+
+  $: waiting = !!session.metadata?.waitingForInput;
+
+  // When waitingForInput transitions from false to true, it's a new event — reset acknowledged
+  $: if (waiting && !prevWaiting) {
+    acknowledged = false;
+    prevWaiting = true;
+  } else if (!waiting) {
+    prevWaiting = false;
+  }
+
+  // When user views this session while it's waiting, mark as acknowledged
+  $: if (active && waiting) {
+    acknowledged = true;
+  }
+
+  $: showAttention = waiting && !active && !isInactive && !acknowledged;
+
   const dispatch = createEventDispatcher<{
     click: void;
     close: void;
@@ -34,6 +54,16 @@
       return path.replace(home, '~');
     }
     return path;
+  }
+
+  function getContextColor(contextUsed: string): string {
+    const match = contextUsed.match(/(\d+(?:\.\d+)?)/);
+    if (!match) return 'text-terminal-muted';
+    const pct = parseFloat(match[1]);
+    if (pct >= 75) return 'text-red-400';
+    if (pct >= 60) return 'text-amber-400';
+    if (pct >= 50) return 'text-yellow-400';
+    return 'text-green-400';
   }
 
   function handleToggleCollapse(e: MouseEvent) {
@@ -82,7 +112,10 @@
     <span class="w-2 h-2 rounded-full shrink-0 {getStatusIndicator(session.status)}"></span>
 
     <!-- Session name -->
-    <span class="font-medium text-sm truncate flex-1">{session.name}</span>
+    <span
+      class="font-medium text-sm truncate flex-1"
+      class:attention-pulse={showAttention}
+    >{session.name}</span>
 
     <!-- Action buttons -->
     <div class="flex items-center gap-0.5 shrink-0">
@@ -117,28 +150,28 @@
       {#if session.metadata.workingDir}
         <div class="flex items-center gap-1.5 truncate" title={session.metadata.workingDir}>
           <span>📁</span>
-          <span class="truncate">{shortenPath(session.metadata.workingDir)}</span>
+          <span class="truncate text-gray-400">{shortenPath(session.metadata.workingDir)}</span>
         </div>
       {/if}
 
       {#if session.metadata.gitBranch}
         <div class="flex items-center gap-1.5">
           <span>🌿</span>
-          <span class="truncate">{session.metadata.gitBranch}</span>
+          <span class="truncate text-gray-400">{session.metadata.gitBranch}</span>
         </div>
       {/if}
 
       {#if session.metadata.model}
         <div class="flex items-center gap-1.5">
           <span>🤖</span>
-          <span class="truncate">{session.metadata.model}</span>
+          <span class="truncate text-gray-400">{session.metadata.model}</span>
         </div>
       {/if}
 
       {#if session.metadata.contextUsed}
         <div class="flex items-center gap-1.5">
           <span>📊</span>
-          <span>{session.metadata.contextUsed}</span>
+          <span class="{getContextColor(session.metadata.contextUsed)}">{session.metadata.contextUsed}</span>
         </div>
       {/if}
 

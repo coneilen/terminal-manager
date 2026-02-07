@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer, clipboard } from 'electron';
 import { homedir } from 'os';
 
+// Each Terminal component adds a session:output listener, so the count
+// scales with the number of sessions. Raise the limit to avoid spurious warnings.
+ipcRenderer.setMaxListeners(100);
+
 export interface Session {
   id: string;
   name: string;
@@ -8,10 +12,12 @@ export interface Session {
   status: 'active' | 'idle' | 'closed';
   metadata: {
     workingDir: string;
+    gitRoot: string;
     gitBranch: string;
     model: string;
     contextUsed: string;
     lastMessage: string;
+    waitingForInput: boolean;
   };
   createdAt: string;
 }

@@ -3,10 +3,12 @@ export type SessionStatus = 'active' | 'idle' | 'closed';
 
 export interface SessionMetadata {
   workingDir: string;
+  gitRoot: string;
   gitBranch: string;
   model: string;
   contextUsed: string;
   lastMessage: string;
+  waitingForInput: boolean;
 }
 
 export interface Session {

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync } from 'fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { SavedSession } from './persistence';
@@ -113,6 +113,101 @@ function getSessionsFromHistory(): Map<string, ImportableSession> {
   return sessions;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Decode a Claude projects directory name back to a filesystem path.
+ * The CLI encodes paths by replacing / and . with -, e.g.
+ * "/Users/foo/bar.worktree/baz" → "-Users-foo-bar-worktree-baz"
+ *
+ * We greedily reconstruct by trying /, -, and . as separators at each
+ * segment boundary, preferring whichever produces a path that exists on disk.
+ */
+export function decodeProjectDirName(dirName: string): string {
+  const candidate = dirName.replace(/-/g, '/');
+  if (existsSync(candidate)) return candidate;
+
+  const parts = dirName.split('-').filter(Boolean);
+  let resolved = '';
+  for (const part of parts) {
+    if (!resolved) {
+      // First segment — must start with /
+      resolved = '/' + part;
+      continue;
+    }
+    // Try separators in priority order: /, ., -, _
+    const trySlash = resolved + '/' + part;
+    const tryDot = resolved + '.' + part;
+    const tryHyphen = resolved + '-' + part;
+    const tryUnderscore = resolved + '_' + part;
+
+    if (existsSync(trySlash)) {
+      resolved = trySlash;
+    } else if (existsSync(tryDot)) {
+      resolved = tryDot;
+    } else if (existsSync(tryHyphen)) {
+      resolved = tryHyphen;
+    } else if (existsSync(tryUnderscore)) {
+      resolved = tryUnderscore;
+    } else {
+      // Nothing exists yet — default to / (building toward a deeper path)
+      resolved = trySlash;
+    }
+  }
+  return resolved || candidate;
+}
+
+/**
+ * Scan ~/.claude/projects/ for sessions not in history.jsonl
+ */
+function getSessionsFromProjects(knownSessions: Map<string, ImportableSession>): void {
+  const projectsDir = join(getClaudeDir(), 'projects');
+  if (!existsSync(projectsDir)) return;
+
+  try {
+    const projectDirs = readdirSync(projectsDir);
+
+    for (const projDirName of projectDirs) {
+      const projPath = join(projectsDir, projDirName);
+      try {
+        if (!statSync(projPath).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+
+      const project = decodeProjectDirName(projDirName);
+
+      try {
+        const files = readdirSync(projPath);
+        for (const fname of files) {
+          if (!fname.endsWith('.jsonl')) continue;
+          const sessionId = fname.slice(0, -6);
+          if (!UUID_RE.test(sessionId)) continue;
+          if (knownSessions.has(sessionId)) continue;
+
+          // Get file mtime as timestamp
+          try {
+            const st = statSync(join(projPath, fname));
+            knownSessions.set(sessionId, {
+              sessionId,
+              project,
+              lastMessage: '',
+              timestamp: st.mtimeMs,
+              isActive: false
+            });
+          } catch {
+            // Skip unreadable files
+          }
+        }
+      } catch {
+        // Skip unreadable project directories
+      }
+    }
+  } catch {
+    // Projects directory read error
+  }
+}
+
 /**
  * Get importable Claude sessions, deduplicated against existing sessions
  */
@@ -120,28 +215,25 @@ export function getImportableSessions(existingSessions: SavedSession[]): Importa
   const activeProjects = getActiveIdeSessions();
   const historySessions = getSessionsFromHistory();
 
+  // Also discover sessions from the projects directory
+  getSessionsFromProjects(historySessions);
+
   // Mark active sessions
   for (const session of historySessions.values()) {
     session.isActive = activeProjects.has(session.project);
   }
 
-  // Get existing working directories for deduplication
-  const existingWorkingDirs = new Set(existingSessions.map(s => s.workingDir));
+  // Get existing session IDs to avoid re-importing
+  const existingIds = new Set(existingSessions.map(s => s.id));
 
-  // Filter out sessions we already have (by working directory)
+  // Show all unique sessions by sessionId. Don't dedup by project path —
+  // multiple sessions can legitimately exist for the same directory
+  // (e.g. worktrees that share a git root, or different conversations).
   const importable = Array.from(historySessions.values())
-    .filter(session => !existingWorkingDirs.has(session.project))
+    .filter(session => !existingIds.has(session.sessionId))
     .sort((a, b) => b.timestamp - a.timestamp); // Most recent first
 
-  // Deduplicate by project path (keep most recent per project)
-  const byProject = new Map<string, ImportableSession>();
-  for (const session of importable) {
-    if (!byProject.has(session.project)) {
-      byProject.set(session.project, session);
-    }
-  }
-
-  return Array.from(byProject.values()).slice(0, 50); // Limit to 50 most recent
+  return importable.slice(0, 100); // Limit to 100 most recent
 }
 
 /**

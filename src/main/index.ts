@@ -37,8 +37,7 @@ function createWindow(): void {
   // Initialize session manager
   sessionManager = new SessionManager(mainWindow);
 
-  // Restore saved sessions BEFORE loading the renderer
-  // This ensures sessions are available when the renderer calls listSessions()
+  // Register saved sessions as dormant (no PTY yet) so listSessions() returns them
   sessionManager.restoreSessions();
 
   // Initialize tunnel manager
@@ -76,6 +75,11 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
+
+  // Start auto-discovery after renderer loads
+  mainWindow.webContents.once('did-finish-load', () => {
+    sessionManager!.startAutoDiscovery();
+  });
 
   mainWindow.on('close', () => {
     // Clean up before window closes

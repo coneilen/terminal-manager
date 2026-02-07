@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve, dirname } from 'path';
 import { homedir } from 'os';
 import type { SessionMetadata } from './types';
 
@@ -33,7 +33,8 @@ export function extractGitBranch(workingDir: string): string {
     const branch = execSync('git rev-parse --abbrev-ref HEAD', {
       cwd: expanded,
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
     }).trim();
 
     return branch;
@@ -59,10 +60,17 @@ export function extractMetadataFromOutput(
   // Extract window title from OSC sequence - contains current task
   // Claude uses OSC 0: \u001b]0;✳ Task Name\u0007
   const claudeTitleMatch = output.match(/\u001b\]0;[⠐⠂✳✶✻✽✢·⠈⠁⠃]\s*([^\u0007]+)\u0007/);
-  if (claudeTitleMatch && claudeTitleMatch[1] && claudeTitleMatch[1] !== 'Claude Code') {
+  if (claudeTitleMatch && claudeTitleMatch[1]) {
     const title = claudeTitleMatch[1].trim();
-    if (title.length > 2 && title.length < 80) {
-      updates.lastMessage = title;
+    if (title === 'Claude Code') {
+      // "✳ Claude Code" is the idle title — Claude is waiting for user input
+      updates.waitingForInput = true;
+    } else {
+      // Spinner + task description means Claude is actively processing
+      if (title.length > 2 && title.length < 80) {
+        updates.lastMessage = title;
+      }
+      updates.waitingForInput = false;
     }
   }
 
@@ -80,9 +88,10 @@ export function extractMetadataFromOutput(
   const dimTextMatch = output.match(/\u001b\[2m([^\u001b]+)\u001b\[22m/);
   if (dimTextMatch && dimTextMatch[1]) {
     const prompt = dimTextMatch[1].trim();
-    if (prompt.length > 2 && prompt.length < 100
-        && !prompt.startsWith('Type @')
-        && !prompt.startsWith('─')) {
+    if (prompt.startsWith('Type @')) {
+      // Claude is showing input placeholder — waiting for user input
+      updates.waitingForInput = true;
+    } else if (prompt.length > 2 && prompt.length < 100 && !prompt.startsWith('─')) {
       updates.lastMessage = prompt;
     }
   }
@@ -117,21 +126,55 @@ export function extractMetadataFromOutput(
       updates.lastMessage = input;
     }
   }
+  // Copilot bare prompt (❯ with no input) means waiting for input
+  if (output.includes('❯') && !copilotPromptMatch) {
+    updates.waitingForInput = true;
+  }
 
   // Thinking indicator (lowest priority)
   if (output.includes('thinking') && !updates.lastMessage) {
     updates.lastMessage = 'Thinking...';
+    updates.waitingForInput = false;
   }
 
   return updates;
 }
 
+export function extractGitRoot(workingDir: string): string {
+  try {
+    const expanded = expandPath(workingDir);
+    const commonDir = execSync('git rev-parse --git-common-dir', {
+      cwd: expanded,
+      encoding: 'utf-8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim();
+
+    // Resolve to absolute path (commonDir can be relative like ".git")
+    const absolute = commonDir.startsWith('/')
+      ? commonDir
+      : resolve(expanded, commonDir);
+
+    // The common dir is the .git directory of the main repo.
+    // Strip trailing /.git to get the repo root path.
+    const normalized = resolve(absolute);
+    if (normalized.endsWith('/.git')) {
+      return normalized.slice(0, -5);
+    }
+    return dirname(normalized);
+  } catch {
+    return workingDir;
+  }
+}
+
 export function createInitialMetadata(workingDir: string): SessionMetadata {
   return {
     workingDir,
+    gitRoot: extractGitRoot(workingDir),
     gitBranch: extractGitBranch(workingDir),
     model: '',
     contextUsed: '',
-    lastMessage: ''
+    lastMessage: '',
+    waitingForInput: false
   };
 }

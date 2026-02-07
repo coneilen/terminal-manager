@@ -54,7 +54,6 @@ export function createTerminal(container: HTMLElement, sessionId: string): Termi
   terminal.loadAddon(fitAddon);
 
   terminal.open(container);
-  fitAddon.fit();
 
   // Intercept app shortcuts before they go to the terminal
   terminal.attachCustomKeyEventHandler((event) => {
@@ -106,15 +105,22 @@ export function createTerminal(container: HTMLElement, sessionId: string): Termi
     window.api.writeToSession(sessionId, data);
   });
 
-  // Handle resize
+  // Let the ResizeObserver handle ALL fitting — it fires asynchronously after
+  // layout settles, which avoids measuring during intermediate states (sidebar
+  // transitions, flex reflows, etc.). No manual fit() calls on creation.
+  let resizeTimer: ReturnType<typeof setTimeout>;
   const resizeObserver = new ResizeObserver(() => {
-    try {
-      fitAddon.fit();
-      const { cols, rows } = terminal;
-      window.api.resizeSession(sessionId, cols, rows);
-    } catch {
-      // Ignore resize errors during cleanup
-    }
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      try {
+        if (container.offsetWidth === 0 || container.offsetHeight === 0) return;
+        fitAddon.fit();
+        const { cols, rows } = terminal;
+        window.api.resizeSession(sessionId, cols, rows);
+      } catch {
+        // Ignore resize errors during cleanup
+      }
+    }, 50);
   });
 
   resizeObserver.observe(container);
@@ -123,6 +129,7 @@ export function createTerminal(container: HTMLElement, sessionId: string): Termi
     terminal,
     fitAddon,
     dispose: () => {
+      clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       terminal.dispose();
     }

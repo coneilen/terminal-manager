@@ -8,10 +8,12 @@ interface Session {
   status: 'active' | 'idle' | 'closed';
   metadata: {
     workingDir: string;
+    gitRoot: string;
     gitBranch: string;
     model: string;
     contextUsed: string;
     lastMessage: string;
+    waitingForInput: boolean;
   };
   createdAt: string;
 }

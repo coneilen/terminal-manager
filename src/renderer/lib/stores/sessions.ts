@@ -5,10 +5,12 @@ export type SessionStatus = 'active' | 'idle' | 'closed';
 
 export interface SessionMetadata {
   workingDir: string;
+  gitRoot: string;
   gitBranch: string;
   model: string;
   contextUsed: string;
   lastMessage: string;
+  waitingForInput: boolean;
 }
 
 export interface Session {
@@ -20,11 +22,20 @@ export interface Session {
   createdAt: string;
 }
 
-// Store for all sessions
+// Store for all sessions (sidebar tree)
 export const sessions = writable<Session[]>([]);
 
 // Store for the currently active session ID
 export const activeSessionId = writable<string | null>(null);
+
+// IDs of sessions that have been opened as tabs (user clicked or newly created)
+export const openedSessionIds = writable<Set<string>>(new Set());
+
+// Derived: sessions that have tabs open
+export const openedSessions = derived(
+  [sessions, openedSessionIds],
+  ([$sessions, $openedIds]) => $sessions.filter((s) => $openedIds.has(s.id))
+);
 
 // Derived store for the active session
 export const activeSession = derived(
@@ -38,20 +49,43 @@ export const activeSession = derived(
 // Helper functions
 export function addSession(session: Session): void {
   sessions.update((s) => [...s, session]);
-  activeSessionId.set(session.id);
+  openSession(session.id);
+}
+
+export function addSessionQuiet(session: Session): void {
+  sessions.update((s) => {
+    if (s.some((existing) => existing.id === session.id)) return s;
+    return [...s, session];
+  });
+}
+
+export function openSession(id: string): void {
+  openedSessionIds.update((ids) => {
+    const next = new Set(ids);
+    next.add(id);
+    return next;
+  });
+  activeSessionId.set(id);
+}
+
+export function closeTab(id: string): void {
+  openedSessionIds.update((ids) => {
+    const next = new Set(ids);
+    next.delete(id);
+    return next;
+  });
+  // Switch to another open tab or null
+  activeSessionId.update((currentId) => {
+    if (currentId !== id) return currentId;
+    let opened: Session[] = [];
+    openedSessions.subscribe((s) => (opened = s))();
+    return opened.length > 0 ? opened[opened.length - 1].id : null;
+  });
 }
 
 export function removeSession(id: string): void {
+  closeTab(id);
   sessions.update((s) => s.filter((session) => session.id !== id));
-  activeSessionId.update((currentId) => {
-    if (currentId === id) {
-      // Switch to the last remaining session or null
-      let remaining: Session[] = [];
-      sessions.subscribe((s) => (remaining = s))();
-      return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-    }
-    return currentId;
-  });
 }
 
 export function updateSession(updatedSession: Session): void {
@@ -61,11 +95,11 @@ export function updateSession(updatedSession: Session): void {
 }
 
 export function setActiveSession(id: string): void {
-  activeSessionId.set(id);
+  openSession(id);
 }
 
 export function switchToNextSession(): void {
-  sessions.subscribe((s) => {
+  openedSessions.subscribe((s) => {
     activeSessionId.update((currentId) => {
       if (!currentId || s.length === 0) return currentId;
       const currentIndex = s.findIndex((session) => session.id === currentId);
@@ -76,7 +110,7 @@ export function switchToNextSession(): void {
 }
 
 export function switchToPreviousSession(): void {
-  sessions.subscribe((s) => {
+  openedSessions.subscribe((s) => {
     activeSessionId.update((currentId) => {
       if (!currentId || s.length === 0) return currentId;
       const currentIndex = s.findIndex((session) => session.id === currentId);
@@ -87,7 +121,7 @@ export function switchToPreviousSession(): void {
 }
 
 export function switchToSessionByIndex(index: number): void {
-  sessions.subscribe((s) => {
+  openedSessions.subscribe((s) => {
     if (index >= 0 && index < s.length) {
       activeSessionId.set(s[index].id);
     }

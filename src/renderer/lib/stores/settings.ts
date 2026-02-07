@@ -2,12 +2,14 @@ import { writable } from 'svelte/store';
 
 export interface Settings {
   sidebarCollapsed: boolean;
+  sidebarWidth: number;
   defaultWorkingDir: string;
   showStatusBar: boolean;
 }
 
 const defaultSettings: Settings = {
   sidebarCollapsed: false,
+  sidebarWidth: 256,
   defaultWorkingDir: '~',
   showStatusBar: true
 };
