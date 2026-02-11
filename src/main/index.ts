@@ -46,11 +46,6 @@ function createWindow(): void {
   // Set up IPC handlers (with tunnel manager)
   setupIpcHandlers(sessionManager, tunnelManager);
 
-  // Start tunnel discovery (async, non-blocking)
-  tunnelManager.start().catch((err) => {
-    console.error('Failed to start tunnel manager:', err);
-  });
-
   // Handle external links from window.open
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -76,9 +71,30 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
-  // Start auto-discovery after renderer loads
+  // Start networking and auto-discovery after renderer has fully loaded
+  // to avoid Chromium network service crashes killing the page load
   mainWindow.webContents.once('did-finish-load', () => {
     sessionManager!.startAutoDiscovery();
+
+    // Delay tunnel startup so it doesn't interfere with renderer init
+    setTimeout(() => {
+      tunnelManager!.start().catch((err) => {
+        console.error('Failed to start tunnel manager:', err);
+      });
+    }, 2000);
+  });
+
+  // If the renderer crashes (e.g. network service crash), reload it
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`Renderer process gone: ${details.reason}`);
+    if (details.reason !== 'clean-exit') {
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          console.log('Reloading renderer after crash...');
+          mainWindow.webContents.reload();
+        }
+      }, 1000);
+    }
   });
 
   mainWindow.on('close', () => {
