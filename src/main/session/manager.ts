@@ -1,9 +1,10 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import { PtySession } from './pty';
 import { createInitialMetadata, extractMetadataFromOutput } from './metadata';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { addSavedSession, removeSavedSession, loadSavedSessions } from './persistence';
 import { SessionWatcher, type DiscoveredSession } from './watcher';
 import type { Session, SessionCreateOptions, SessionStatus } from './types';
@@ -41,6 +42,24 @@ export class SessionManager extends EventEmitter {
       metadata: createInitialMetadata(options.workingDir),
       createdAt: new Date()
     };
+
+    // Ensure the working directory exists (handles user-typed new paths)
+    const isNew = !existsSync(options.workingDir);
+    mkdirSync(options.workingDir, { recursive: true });
+
+    // Initialize git in new empty folders so claude/copilot have a repo to work with
+    if (isNew || readdirSync(options.workingDir).length === 0) {
+      try {
+        execFileSync('git', ['init'], { cwd: options.workingDir, stdio: 'ignore' });
+      } catch {
+        dialog.showMessageBoxSync(this.mainWindow, {
+          type: 'warning',
+          title: 'Git Not Found',
+          message: 'Could not initialize a git repository in the new folder.',
+          detail: 'Git does not appear to be installed. Claude and Copilot work best in a git repository. Please install git and run "git init" manually.',
+        });
+      }
+    }
 
     const ptySession = new PtySession(id, {
       type: options.type,
