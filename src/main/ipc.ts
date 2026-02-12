@@ -199,7 +199,7 @@ export function setupIpcHandlers(sessionManager: SessionManager, tunnelManager?:
   ipcMain.handle('dialog:openFolder', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const result = await dialog.showOpenDialog(win!, {
-      properties: ['openDirectory'],
+      properties: ['openDirectory', 'createDirectory'],
       title: 'Select Working Directory'
     });
 

@@ -25,7 +25,7 @@ export interface PtyOptions {
   workingDir: string;
   cols?: number;
   rows?: number;
-  resume?: boolean; // For Claude: use --continue flag
+  resume?: boolean; // Use --continue flag to resume previous session
 }
 
 export class PtySession extends EventEmitter {
@@ -76,7 +76,7 @@ export class PtySession extends EventEmitter {
       if (commandSent || !this.ptyProcess || this._isKilled) return;
       commandSent = true;
       const command = this.options.type === 'claude' ? 'claude' : 'copilot';
-      if (this.options.type === 'claude' && this.options.resume) {
+      if (this.options.resume) {
         if (process.platform === 'win32') {
           // PowerShell 5.1 doesn't support || operator
           this.ptyProcess.write(`${command} --continue; if ($LASTEXITCODE -ne 0) { ${command} }\r`);
